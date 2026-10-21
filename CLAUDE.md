@@ -11,8 +11,8 @@ full instructions.
   explain each part. Prefer helping the student write it over writing it for them.
 - When something fails, find the cause first (logs, error message, the failing step), explain
   it, then suggest a fix.
-- Do not write the answers in the "My results" section of README.md. They are graded on the
-  student's own understanding.
+- Do not write the answers in RESULTS.md, and do not change README.md. The answers are graded
+  on the student's own understanding.
 
 ## The environment
 
@@ -26,7 +26,7 @@ full instructions.
 - Results go into the student's own MongoDB Atlas cluster (Lab 05), collection
   `gutenberg.books`. On the student's computer the settings are in the environment variables
   `MONGODB_ATLAS_URL`, `MONGODB_ATLAS_USER`, `MONGODB_ATLAS_PWD`; on EC2 and Lambda in the SSM
-  parameter `/lab07/mongodb_credentials`.
+  parameter `mongodb_credentials`.
 - Python projects use `uv` (`uv sync`, `uv run ...`), also for Chalice (`uv run chalice ...`).
 
 ## The code

@@ -7,7 +7,7 @@ collection gutenberg.books of your MongoDB Atlas cluster from Lab 05.
 
 Atlas settings come from the Lab 05 environment variables MONGODB_ATLAS_URL,
 MONGODB_ATLAS_USER, and MONGODB_ATLAS_PWD when they are set (your computer), and
-otherwise from the SSM parameter /lab07/mongodb_credentials (EC2 and Lambda).
+otherwise from the SSM parameter mongodb_credentials (EC2 and Lambda).
 No password is stored in this repository.
 
 Every run appends the name of the machine it ran on (its host name) and the
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # The Learner Lab runs in us-east-1. An EC2 instance has no default region, so it is set here
 REGION = "us-east-1"
-SSM_PARAMETER = "/lab07/mongodb_credentials"
+SSM_PARAMETER = "mongodb_credentials"
 DATABASE = "gutenberg"
 COLLECTION = "books"
 
