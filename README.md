@@ -451,29 +451,31 @@ This is not a submission; you submit once, after Part 3.
 
 **The Case:** When book 101 arrives, starting a machine for one book is wasteful. A Lambda function triggered by the upload analyzes it in a few seconds, and costs nothing while no books arrive.
 
-In this part you build the Chalice app yourself, around the same `analyze.py` you ran on EC2. Work in the **terminal on your computer**, in your clone.
+In this part you build a Chalice app around a Lambda function. The function runs the same `analyze.py` you ran on EC2. Work in the **terminal on your computer**, in your clone.
 
 ### Step 1: Create a Chalice project
 
+In the top folder of your clone:
+
 ```bash
 uv run chalice new-project book-analyzer
-cd book-analyzer
 ```
 
 Chalice creates a folder `book-analyzer/` with four files:
 
 | File | What it is for |
 | --- | --- |
-| `app.py` | your Lambda function(s); right now an example web endpoint (`@app.route('/')`) that you replace in Step 5 |
+| `app.py` | your Lambda function; right now a sample web endpoint (`@app.route('/')`) that you delete in Step 5. Web endpoints (APIs) come in Lab 10 |
 | `requirements.txt` | the Python packages Chalice installs into the Lambda package; empty for now |
 | `.chalice/config.json` | settings for the deployment: IAM role, memory, timeout |
 | `.gitignore` | keeps Chalice's build files out of Git |
 
 ### Step 2: Add the analysis code
 
-Chalice uploads only what is inside `book-analyzer/`. Your own modules go into a folder that must be called `chalicelib`:
+Chalice uploads only what is inside `book-analyzer/`. Your own modules go into a folder that must be called `chalicelib`. Change into the app's folder first; Steps 2 to 7 all run in `book-analyzer/`:
 
 ```bash
+cd book-analyzer
 mkdir chalicelib
 touch chalicelib/__init__.py
 cp ../src/book_analysis/analyze.py chalicelib/
@@ -509,7 +511,7 @@ cat .chalice/config.json
 
 ### Step 5: Write `app.py`
 
-Replace the example in `app.py` with a function that analyzes every `.txt` file uploaded to your bucket. You need these pieces:
+Open `book-analyzer/app.py`, delete everything in it (the sample web endpoint), and paste this:
 
 ```python
 import logging
@@ -518,23 +520,33 @@ from chalice import Chalice
 
 from chalicelib.analyze import analyze_book
 
-# Change mst3k to your computing ID: your public bucket from Lab 06
+# Your public bucket from Lab 06: change mst3k to your computing ID
 BUCKET = "public-mst3k"
 
 app = Chalice(app_name="book-analyzer")
 # Show the logger.info lines of analyze.py in CloudWatch
 logging.getLogger().setLevel(logging.INFO)
-```
 
-An S3 trigger is a decorator above the function. Chalice then connects the function to the bucket's event notifications when you deploy:
 
-```python
 @app.on_s3_event(bucket=BUCKET, events=["s3:ObjectCreated:*"], suffix=".txt")
 def analyze_new_book(event):
-    ...
+    """Analyze a book when it is uploaded to BUCKET."""
+    # TODO: call analyze_book() with the bucket and the key of the uploaded file
 ```
 
-Write the body of `analyze_new_book` yourself: it calls `analyze_book()` from `analyze.py` with the bucket and the key of the uploaded file. Chalice passes them as `event.bucket` and `event.key`. Keep the name `analyze_new_book`: the deployed function is named after it.
+Then complete it:
+
+1. In `BUCKET`, change `mst3k` to your computing ID.
+2. Replace the `TODO` line with one line that calls `analyze_book()`. Chalice passes the bucket and the key of the uploaded file to your function as `event.bucket` and `event.key`.
+
+What each part does:
+
+| Part | What it does |
+| --- | --- |
+| `from chalicelib.analyze import analyze_book` | imports the function from your copy of `analyze.py` (Step 2) |
+| `@app.on_s3_event(...)` | the trigger: when you deploy, Chalice connects the function to your bucket, so it runs for every new object whose key ends in `.txt` |
+| `def analyze_new_book(event)` | your Lambda function. Keep the name: the deployed function is named after it, `book-analyzer-dev-analyze_new_book` |
+| `logging.getLogger().setLevel(logging.INFO)` | lets the `logger.info` lines of `analyze.py`, such as `pg74.txt: ... words`, reach the log |
 
 ### Step 6: Deploy
 
@@ -542,7 +554,10 @@ Write the body of `analyze_new_book` yourself: it calls `analyze_book()` from `a
 uv run chalice deploy
 ```
 
-Chalice packages `app.py`, `chalicelib/`, and the packages in `requirements.txt`, creates the function `book-analyzer-dev-analyze_new_book`, allows S3 to invoke it, and adds the event notification to your bucket. In the **AWS Console**, check **S3** → `public-mst3k` → **Properties** → **Event notifications**.
+Chalice packages `app.py`, `chalicelib/`, and the packages in `requirements.txt`, creates the function `book-analyzer-dev-analyze_new_book`, allows S3 to invoke it, and adds the event notification to your bucket. In the **AWS Console**, check:
+
+- **The S3 trigger:** **S3** → `public-mst3k` → **Properties** → **Event notifications** lists a notification for `.txt` files that sends events to `book-analyzer-dev-analyze_new_book`.
+- **The Lambda function:** **Lambda** → **Functions** → `book-analyzer-dev-analyze_new_book`. The **Function overview** shows **S3** as its trigger, and **Configuration** → **General configuration** shows 1024 MB of memory and a timeout of 5 min.
 
 ### Step 7: Upload a new book
 
