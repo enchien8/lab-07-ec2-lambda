@@ -3,12 +3,22 @@
 In [Lab 06](https://github.com/ksiller/lab-06-s3) you staged 100 Project Gutenberg books in your bucket `public-mst3k`. In this lab you analyze them in the cloud, in two ways:
 
 1. **Part 1: Amazon EC2, as one batch job.** You launch a virtual machine that installs its own software, clones this repository at boot, and analyzes every book in your bucket. The results go into your MongoDB Atlas cluster from [Lab 05](https://github.com/ksiller/lab-05-nosql), one document per book.
-2. **Part 2: AWS Lambda, one event at a time.** You deploy the same analysis code as a Lambda function with Chalice. Every book you upload afterwards is analyzed automatically, within seconds, with no machine running.
+2. **Part 2: AWS Lambda, one event at a time.** You build a Chalice app around the same analysis code and deploy it as a Lambda function. Every book you upload afterwards is analyzed automatically, within seconds, with no machine running.
+3. **Part 3: A query of your own.** You add a table to the report, for example one that compares the vocabulary of the books or counts the books by author.
 
-You do not write analysis code in this lab. It is provided in `src/book_analysis/analyze.py`. Your work is to deploy and run it in both places, and to document the results.
+You do not write analysis code in this lab. It is provided in `src/book_analysis/analyze.py`. Your work is to run it on EC2, build the Lambda app around it, add one query to the report, and document the results.
 
 > [!IMPORTANT]
 > `mst3k` is a placeholder. Replace it everywhere with your UVA computing ID, for example `public-mst3k` → `public-abc2de`. If your Lab 06 bucket has a different name, use that name.
+
+## Schedule: two weeks, one submission
+
+| Week | Do | Milestone |
+| --- | --- | --- |
+| 1 | [Setup](#setup) and [Part 1: EC2](#part-1-analyze-all-books-on-ec2) | your 100 books analyzed on EC2, terminate instance when completed |
+| 2 | [Part 2: Lambda](#part-2-build-a-lambda-app-for-new-books) and [Part 3: query](#part-3-add-a-query-to-the-report) | on-demand automatic processing with Chalice app (Lambda) when a new book is uploaded |
+
+You submit **once**, at the end of week 2, for all three parts (see [Submit your work](#submit-your-work)). Each part ends with a milestone checklist: finish it before you move on.
 
 ## Learning goals
 
@@ -22,12 +32,21 @@ You do not write analysis code in this lab. It is provided in `src/book_analysis
 
 **Part 2: Serverless computing (AWS Lambda)**
 
-- Understand what serverless computing is
+- Understand what serverless computing is, and how event-driven processing differs from a batch job
 - Know the use cases for a server (EC2) vs. serverless compute (AWS Lambda)
-- Write a Chalice app that deploys a Lambda function:
-  - How to write a Lambda function
-  - How to trigger its execution (here: an upload to S3)
-  - How to deploy it to AWS
+- Build a Lambda function as a Chalice app:
+  - Create a Chalice project and know what each of its files is for
+  - Package your own code (`chalicelib/`) and the packages it needs (`requirements.txt`)
+  - Trigger the function with an event: here, an upload to S3
+- Deploy the Chalice app to AWS:
+  - Configure the deployment: IAM role, memory, and timeout (`.chalice/config.json`)
+  - Deploy with `chalice deploy`, and know what it creates in AWS: the function, the permission for S3 to invoke it, and the bucket's event notification
+  - Check and debug the deployed function with its logs (`chalice logs`)
+
+**Part 3: Querying the results**
+
+- Query MongoDB from Python with PyMongo: `find`, `sort`, `limit`, `distinct`, and `count_documents`
+- Judge whether a result means what it seems to: a fair comparison, clean data
 
 The lab builds on:
 
@@ -41,24 +60,24 @@ The lab builds on:
 ```text
 lab-07-ec2-lambda/
 ├── README.md
-├── pyproject.toml              # uv project: boto3, pymongo; chalice for development
+├── pyproject.toml              # uv project: boto3, pymongo, nltk; chalice for development
 ├── uv.lock
 ├── bootstrap.sh                # EC2 user data: installs git and uv, clones this repo (Part 1)
 ├── src/book_analysis/
 │   ├── analyze.py              # the analysis: S3 → one document per book → MongoDB
-│   └── report.py               # prints your proof of completion
-└── book-analyzer/              # Chalice app for Lambda (Part 2)
-    ├── app.py
-    ├── requirements.txt
-    ├── chalicelib/analyze.py   # a link to src/book_analysis/analyze.py: one file, two places
-    └── .chalice/config.json
+│   └── report.py               # prints your proof of completion; you add a query (Part 3)
+├── chalice-config.json         # deployment settings for your Lambda app (Part 2)
+├── docs/                       # screenshots for this README
+└── CLAUDE.md                   # background for Claude Code, if you use it
 ```
 
-`pyproject.toml` defines two commands. `uv run analyze public-mst3k` analyzes every `.txt` file in the bucket. `uv run report` prints what is in your database.
+In Part 2 you create the Chalice app `book-analyzer/` yourself.
+
+You run the two scripts in `src/book_analysis/` with `uv run python`, from the top folder of your clone. `uv run python src/book_analysis/analyze.py public-mst3k` analyzes every `.txt` file in the bucket. `uv run python src/book_analysis/report.py` prints what is in your database. `uv run` uses the project's environment, with all packages from `pyproject.toml`.
 
 ## What is computed
 
-Each book becomes one document in the collection `books` of the database `gutenberg` on your Atlas cluster. The S3 key is the document's `_id`:
+`analyze.py` computes the same fields wherever it runs. You look at how it does that after Setup, in [The analyze.py script](#the-analyzepy-script). Each book becomes one document in the collection `books` of the database `gutenberg` on your Atlas cluster. The S3 key is the document's `_id`:
 
 ```json
 {
@@ -69,10 +88,11 @@ Each book becomes one document in the collection `books` of the database `gutenb
   "gutenberg_release": "June 27, 2008",
   "word_count": 27427,
   "unique_words": 2575,
-  "vocabulary_ratio": 0.0939,
+  "unique_lemmas": 2045,
+  "vocabulary_ratio": 0.0746,
   "runs": [
-    {"by": "local:my-laptop",       "at": "2026-10-27T14:41:05Z"},
-    {"by": "ec2:i-0123456789abcdef0", "at": "2026-10-27T15:02:11Z"}
+    {"host": "my-laptop",      "at": "2026-10-27T14:41:05Z"},
+    {"host": "ip-172-31-5-20", "at": "2026-10-27T15:02:11Z"}
   ]
 }
 ```
@@ -83,16 +103,11 @@ Each book becomes one document in the collection `books` of the database `gutenb
 | `gutenberg_release` | when Project Gutenberg published the eBook (`Release date:`), **not** when the book was written |
 | `word_count` | how many words are in the book (a word is a run of letters and apostrophes, in lowercase) |
 | `unique_words` | how many distinct words are in the book |
-| `vocabulary_ratio` | `unique_words / word_count`: a rough measure of how varied the wording is |
-| `runs` | **one entry per analysis**: where it ran (`ec2:<instance id>`, `lambda:<function name>`, or `local:<computer name>`) and when |
+| `unique_lemmas` | how many distinct dictionary forms (lemmas) are in the book: "run", "runs", "running", and "ran" all count as "run" |
+| `vocabulary_ratio` | `unique_lemmas / word_count`: a rough measure of how varied the author's vocabulary is |
+| `runs` | **one entry per analysis**: the name of the machine it ran on (`host`) and when |
 
-`read_header()` takes the metadata from the header that every Project Gutenberg file starts with. Then `strip_gutenberg()` removes that header and the license text at the end, so only the book itself is counted. The files do not say when a book was first published or what genre it is.
-
-> **Coming up in Lab 08:** more comprehensive analytics on UVA HPC. AI models will read every book and add a summary, its genre, and an estimate of when it was first published to the same documents.
-
-`save()` in `analyze.py` writes each document with one `update_one(..., upsert=True)`: `$set` replaces the statistics, and `$push` appends the run to `runs`. A second run updates the numbers and keeps the history. Lab 08 adds more fields to the same documents.
-
-`runs` is your proof of completion. After Part 1, your 100 books list the ID of *your* EC2 instance. After Part 2, the book you uploaded lists *your* Lambda function. Read `where_am_i()` in `analyze.py` to see how the code finds out where it runs.
+`runs` is your proof of completion. After Part 1, your 100 books list the host name of *your* EC2 instance. After Part 2, the book you uploaded lists the host name of the Lambda environment that analyzed it.
 
 ## Setup
 
@@ -115,7 +130,7 @@ The project is already set up. Create the environment from `pyproject.toml` and 
 
 ```bash
 uv sync
-uv run analyze --help
+uv run python src/book_analysis/analyze.py --help
 ```
 
 `uv sync` also downloads Python 3.13 if you do not have it. If `uv` is missing, install it with [Installing uv](https://docs.astral.sh/uv/getting-started/installation/).
@@ -124,7 +139,30 @@ uv run analyze --help
 
 1. On the AWS Academy **Learner Lab** page, click **Start Lab** and wait for the green **AWS** icon. **Do not click Reset**: it deletes your Lab 06 buckets.
 2. Click **AWS Details** → **AWS CLI** → **Show**, and paste the block into `~/.aws/credentials`. The credentials change with every lab session.
-3. Check that the CLI works and that your Lab 06 bucket still has the books:
+3. Confirm the contents of both AWS CLI files. The output includes your secret key and session token, so do not run this while sharing your screen:
+
+   ```bash
+   cat ~/.aws/credentials
+   cat ~/.aws/config
+   ```
+
+   `~/.aws/credentials` must contain the block you just pasted, with each value on a single line. `~/.aws/config` must set the region and output format:
+
+   ```text
+   [default]
+   aws_access_key_id=ASIA...
+   aws_secret_access_key=...
+   aws_session_token=...
+   ```
+
+   ```text
+   [default]
+   region = us-east-1
+   output = json
+   ```
+
+   If a file is missing or looks different, follow [AWS CLI configuration](https://github.com/ksiller/lab-06-s3#4-aws-cli-configuration-temporary-credentials) in Lab 06.
+4. Check that the CLI works and that your Lab 06 bucket still has the books:
 
    ```bash
    aws sts get-caller-identity
@@ -135,39 +173,62 @@ uv run analyze --help
 
 ### 4. Prepare your MongoDB Atlas cluster
 
-You use your Atlas cluster from [Lab 05](https://github.com/ksiller/lab-05-nosql). First check that your `MONGODB_ATLAS_*` environment variables from Lab 05 are still set. You should see `MONGODB_ATLAS_URL`, `MONGODB_ATLAS_USER`, and `MONGODB_ATLAS_PWD`. The output includes your password, so do not run this while sharing your screen:
+You use your Atlas cluster from [Lab 05](https://github.com/ksiller/lab-05-nosql). First check that your `MONGODB_ATLAS_*` environment variables from Lab 05 are still set. The output includes your password, so do not run this while sharing your screen:
 
 ```bash
 printenv | grep -i mongo
 ```
 
-If any of them is missing, follow [MongoDB Atlas setup](https://github.com/ksiller/DS2022/blob/main/setup/mongodb.md) again, or run `source ~/.zshrc` (or `~/.bashrc`) if you set them in a terminal that was open before.
+You should see `MONGODB_ATLAS_URL`, `MONGODB_ATLAS_USER`, and `MONGODB_ATLAS_PWD`. If any of them is missing, follow [MongoDB Atlas setup](https://github.com/ksiller/DS2022/blob/main/setup/mongodb.md) again. If you just updated your `~/.zshrc` or `~/.bashrc`, close your terminal and open a new one. The environment variables are then loaded; confirm with `printenv | grep -i mongo`.
 
-Then check that you can still reach your Atlas cluster. If the Atlas web interface shows it as **Paused**, click **Resume** and wait a few minutes:
+**Make sure your cluster is running.**
 
-```bash
-mongosh "$MONGODB_ATLAS_URL" --apiVersion 1 --username "$MONGODB_ATLAS_USER" --eval "db.runCommand({ping: 1})"
-```
+1. Log in at [cloud.mongodb.com](https://cloud.mongodb.com). Atlas opens **All Projects**. Click the project that holds your Lab 05 cluster (usually **Project 0**):
 
-Enter your Atlas password when asked. The output ends with `{ ok: 1 }`.
+   ![All Projects in MongoDB Atlas](docs/mongodb-home.png)
 
-**Allow access from anywhere.** In Lab 05 you allowed only UVA addresses. Your EC2 instance gets a new public address every time it starts, and a Lambda function has no fixed address at all, so Atlas must accept connections from any address. In the Atlas web interface, open **Security** → **Database & Network Access** → **IP Access List**, click **+ Add IP Address**, choose **Allow Access from Anywhere** (`0.0.0.0/0`), and confirm. Leave this entry in place for the rest of the semester: Lab 08 and Lab 10 need it too. From now on, your database user's password is the only thing that protects the cluster, so never commit it or share it.
+2. The **Project Overview** shows your cluster under **Clusters**. In the menu on the left, under **Database**, click **Clusters**:
+
+   ![Project Overview in MongoDB Atlas](docs/mongodb-project.png)
+
+3. A green dot next to the cluster's name means it is running. If the cluster shows **Paused** and a **Resume** button instead, click **Resume** and wait a few minutes until the dot is green:
+
+   ![The Clusters page with a running cluster](docs/mongodb-clusters.png)
+
+4. Check that you can reach the cluster from your computer:
+
+   ```bash
+   mongosh "$MONGODB_ATLAS_URL" --apiVersion 1 --username "$MONGODB_ATLAS_USER" --eval "db.runCommand({ping: 1})"
+   ```
+
+   Enter your Atlas password when asked. The output ends with `{ ok: 1 }`.
+
+**Allow access from anywhere.** In Lab 05 you allowed only UVA addresses. Your EC2 instance gets a new public address every time it starts, and a Lambda function has no fixed address at all, so Atlas must accept connections from any address.
+
+1. In the menu on the left, under **Security**, click **Database & Network Access**, then **IP Access List**.
+2. Click **+ Add IP Address**.
+3. Click **Allow Access from Anywhere**. The field **Access List Entry** now shows `0.0.0.0/0`. Enter a comment such as `Labs 07-10`, and click **Confirm**.
+4. Wait until the new entry's **Status** is **Active** (about a minute). Your list now looks like this, with the UVA entries from Lab 05 and `0.0.0.0/0`:
+
+   ![The IP Access List with the entry 0.0.0.0/0](docs/mongodb-ipaccesslist.png)
+
+Leave this entry in place for the rest of the semester: Lab 08 and Lab 10 need it too. From now on, your database user's password is the only thing that protects the cluster, so never commit it or share it.
 
 ### 5. Store your Atlas settings in SSM Parameter Store
 
-On your computer, `analyze.py` reads the three Lab 05 environment variables. The EC2 instance and the Lambda function do not have them, and they must not be in a file you commit. **AWS Systems Manager Parameter Store** keeps such values in your AWS account. When the environment variables are missing, `analyze.py` reads the parameter `/lab07/mongodb` instead (see `get_atlas_settings()`), with the role `LabRole` on EC2 and Lambda.
+On your computer, `analyze.py` reads the three Lab 05 environment variables. The EC2 instance and the Lambda function do not have them, and they must not be in a file you commit. **AWS Systems Manager Parameter Store** keeps such values in your AWS account. When the environment variables are missing, `analyze.py` reads the parameter `/lab07/mongodb_credentials` instead (see `get_atlas_settings()`), with the role `LabRole` on EC2 and Lambda.
 
 Store the three values as one JSON value, copied from your environment variables:
 
 ```bash
-aws ssm put-parameter --name /lab07/mongodb --type SecureString --overwrite \
+aws ssm put-parameter --name /lab07/mongodb_credentials --type SecureString --overwrite \
   --value "{\"url\": \"$MONGODB_ATLAS_URL\", \"user\": \"$MONGODB_ATLAS_USER\", \"password\": \"$MONGODB_ATLAS_PWD\"}"
 ```
 
 `SecureString` stores the value encrypted. Check it:
 
 ```bash
-aws ssm get-parameter --name /lab07/mongodb --with-decryption --query Parameter.Value --output text
+aws ssm get-parameter --name /lab07/mongodb_credentials --with-decryption --query Parameter.Value --output text
 ```
 
 The output must be valid JSON with your URL, user, and password. If your password contains a `"` or a `\`, the JSON breaks: change the password in Atlas (**Database Access** → **Edit**) and in your shell configuration, then repeat this step.
@@ -179,17 +240,46 @@ If `put-parameter` fails with a KMS `AccessDenied` error, run it again with `--t
 Analyze three books from your computer, then print the report:
 
 ```bash
-uv run analyze public-mst3k --limit 3
-uv run report
+uv run python src/book_analysis/analyze.py public-mst3k --limit 3
+uv run python src/book_analysis/report.py
 ```
 
-The report shows one row for `local:<your computer name>` with 3 books. If this works, S3 and Atlas are set up correctly. In `mongosh` (as in Lab 05), `use gutenberg` and `db.books.findOne()` show one of the documents.
+The report shows one row with your computer's name and 3 books. If this works, S3 and Atlas are set up correctly. In `mongosh` (as in Lab 05), `use gutenberg` and `db.books.findOne()` show one of the documents.
 
 To also test the Parameter Store path that EC2 and Lambda use, run the same command without the environment variables:
 
 ```bash
-env -u MONGODB_ATLAS_URL uv run analyze public-mst3k --limit 1
+env -u MONGODB_ATLAS_URL uv run python src/book_analysis/analyze.py public-mst3k --limit 1
 ```
+
+## The analyze.py script
+
+You ran `analyze.py` on your computer in Setup step 6. Parts 1 and 2 run the same file on EC2 and in Lambda. Open [src/book_analysis/analyze.py](src/book_analysis/analyze.py) next to this table; the functions are listed in the order the analysis uses them:
+
+| Function | What it does | Called by |
+| --- | --- | --- |
+| `get_atlas_settings()` | returns the Atlas URL, user, and password: from the environment variables on your computer, from the SSM parameter `/lab07/mongodb_credentials` on EC2 and in Lambda | `connect()` |
+| `connect()` | connects to Atlas and returns a client; the caller closes it in `finally`, also after an error | `main()`, `analyze_book()` |
+| `get_book_keys()` | returns the keys of all `.txt` files in the bucket | `main()` |
+| `download()` | returns the text of one book in S3 | `main()`, `analyze_book()` |
+| `read_header()` | takes title, author, language, and release date from the header | `process()` |
+| `strip_gutenberg()` | removes the header and the license, so only the book itself is counted | `process()` |
+| `lemmatize()` | reduces each word to its dictionary form with NLTK | `process()` |
+| `process()` | computes all fields of one book | `main()`, `analyze_book()` |
+| `save()` | writes one book's document to Atlas and records the run | `main()`, `analyze_book()` |
+| `main()` | **entry point when you run `analyze.py`**: analyzes every book in the bucket, one after another (your computer, EC2) | `uv run python src/book_analysis/analyze.py` |
+| `analyze_book()` | **entry point for Lambda**: analyzes one book | your `app.py` (Part 2) |
+
+`read_header()` takes the metadata from the header that every Project Gutenberg file starts with. Then `strip_gutenberg()` removes that header and the license text at the end. The files do not say when a book was first published or what genre it is.
+
+`lemmatize()` uses the [NLTK](https://www.nltk.org/) library: first `nltk.pos_tag` finds out whether a word is a noun, verb, adjective, or adverb, then the WordNet lemmatizer looks up its base form ("whispered" → "whisper", "mice" → "mouse"). The first run on a machine downloads the NLTK data it needs (about 12 MB) into the temporary folder.
+
+`save()` writes each document with one `update_one(..., upsert=True)`: `$set` replaces the statistics, and `$push` appends the run to `runs`. A second run updates the numbers and keeps the history. Lab 08 adds more fields to the same documents.
+
+Answer for yourself:
+
+- Which function does `analyze.py` start with when you run it, and which one will your Lambda function call?
+- Why do `main()` and `analyze_book()` both call `connect()`, `download()`, `process()`, and `save()`?
 
 ## Part 1: Analyze all books on EC2
 
@@ -197,7 +287,7 @@ env -u MONGODB_ATLAS_URL uv run analyze public-mst3k --limit 1
 
 ### Step 1: Read the bootstrap script
 
-Open [bootstrap.sh](bootstrap.sh). Passed to the instance as **user data**, it runs once, as root, when the instance boots for the first time. It installs `git`, `curl`, Python 3 and `uv`, and clones this repository into `/home/ubuntu/lab-07-ec2-lambda`. Answer for yourself:
+Open [bootstrap.sh](bootstrap.sh). Passed to the instance as **user data**, it runs once, as root, when the instance boots for the first time. It automatically installs `git`, `curl`, Python 3 and `uv`, and clones this repository into `/home/ubuntu/lab-07-ec2-lambda` on the new EC2 instance when it is provisioned. Answer for yourself:
 
 - Why does the script end with `chown`, and what would go wrong without it?
 - Why is there no database password and no AWS key in this file?
@@ -255,28 +345,28 @@ Still on the instance:
 
 ```bash
 cd ~/lab-07-ec2-lambda
-uv run analyze public-mst3k
+uv run python src/book_analysis/analyze.py public-mst3k
 ```
 
 The log lists each book. The last line looks like this:
 
 ```text
-Processed 100 books from s3://public-mst3k in 61.3 s on ec2:i-0123456789abcdef0
+Processed 100 books from s3://public-mst3k in 372.4 s on ip-172-31-5-20
 ```
 
 **Copy this line** for your submission. Then log out with `exit`.
 
-There is no `~/.aws/credentials` file and no `MONGODB_ATLAS_*` variable on the instance. Check how the code still gets access: `uv run python -c "import boto3; print(boto3.client('sts').get_caller_identity()['Arn'])"` prints an ARN with `assumed-role/LabRole/`. With that role, `analyze.py` reads S3 and the Atlas settings in `/lab07/mongodb`.
+There is no `~/.aws/credentials` file and no `MONGODB_ATLAS_*` variable on the instance. Check how the code still gets access: `uv run python -c "import boto3; print(boto3.client('sts').get_caller_identity()['Arn'])"` prints an ARN with `assumed-role/LabRole/`. With that role, `analyze.py` reads S3 and the Atlas settings in `/lab07/mongodb_credentials`.
 
 ### Step 5: Check the database and terminate the instance
 
 Back in the **terminal on your computer**, in your clone:
 
 ```bash
-uv run report
+uv run python src/book_analysis/report.py
 ```
 
-The table **Runs by machine** now has a row `ec2:i-...` with 100 books, under your `local:` test runs from Setup. The instance ID is that of *your* instance. The three books from your test have two entries in `runs`: the EC2 run updated their numbers and kept the history.
+The table **Runs by machine** now has a row `ip-172-31-...` with 100 books, next to the row of your computer from Setup. It is the host name of *your* instance, the same as in its prompt `ubuntu@ip-...`. The three books from your test have two entries in `runs`: the EC2 run updated their numbers and kept the history.
 
 The job is done, so terminate the instance:
 
@@ -286,36 +376,122 @@ aws ec2 terminate-instances --instance-ids "$IID"
 
 **Success:** Every book in your bucket has a document with a run on your EC2 instance.
 
-## Part 2: Analyze new books with Lambda
+### Milestone 1: end of week 1
+
+- [ ] `report.py` shows a row `ip-172-31-...` with 100 books under **Runs by machine**.
+- [ ] You saved the last line of `analyze.py` from the instance (you need it for the submission, and the instance is gone).
+- [ ] The instance is terminated: `aws ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].State.Name'` prints `"terminated"`.
+
+Save your progress in your fork, so nothing is lost between the weeks. Start the section `## My results` at the top of this `README.md` (see [Submit your work](#submit-your-work)) with the line from the instance, then:
+
+```bash
+git add README.md
+git commit -m "Lab 07: Part 1 done"
+git push origin main
+```
+
+This is not a submission; you submit once, after Part 3.
+
+> **Before you continue in week 2:** start the Learner Lab and paste fresh credentials into `~/.aws/credentials` (they expired), and check that your Atlas cluster is not paused (Setup step 4). Your bucket, the books' documents, and the parameter `/lab07/mongodb_credentials` are still there.
+
+## Part 2: Build a Lambda app for new books
 
 **The Case:** When book 101 arrives, starting a machine for one book is wasteful. A Lambda function triggered by the upload analyzes it in a few seconds, and costs nothing while no books arrive.
 
-### Step 1: Read and configure the Chalice app
+In this part you build the Chalice app yourself, around the same `analyze.py` you ran on EC2. Work in the **terminal on your computer**, in your clone.
 
-Open [book-analyzer/app.py](book-analyzer/app.py). The handler `analyze_new_book` calls `analyze_book()` from the same `analyze.py` you ran on EC2. The decorator `@app.on_s3_event` tells Chalice to run it whenever a `.txt` file is created in `BUCKET`.
-
-Set your bucket and your account ID. The Learner Lab does not let Chalice create an IAM role, so `.chalice/config.json` uses `LabRole` (`"manage_iam_role": false`):
+### Step 1: Create a Chalice project
 
 ```bash
+uv run chalice new-project book-analyzer
 cd book-analyzer
-sed -i.bak "s/public-mst3k/public-$USER/" app.py
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-sed -i.bak "s/ACCOUNT_ID/$ACCOUNT/" .chalice/config.json
-grep '^BUCKET' app.py
-grep iam_role_arn .chalice/config.json
 ```
 
-`BUCKET` must be your Lab 06 bucket. If your shell's `$USER` is not your computing ID, edit the line in `app.py` by hand.
+Chalice creates a folder `book-analyzer/` with four files:
 
-### Step 2: Deploy
+| File | What it is for |
+| --- | --- |
+| `app.py` | your Lambda function(s); right now an example web endpoint (`@app.route('/')`) that you replace in Step 5 |
+| `requirements.txt` | the Python packages Chalice installs into the Lambda package; empty for now |
+| `.chalice/config.json` | settings for the deployment: IAM role, memory, timeout |
+| `.gitignore` | keeps Chalice's build files out of Git |
+
+### Step 2: Add the analysis code
+
+Chalice uploads only what is inside `book-analyzer/`. Your own modules go into a folder that must be called `chalicelib`:
+
+```bash
+mkdir chalicelib
+touch chalicelib/__init__.py
+cp ../src/book_analysis/analyze.py chalicelib/
+```
+
+`__init__.py` makes `chalicelib` a Python package, so `app.py` can import from it. The copy must stay the same as `src/book_analysis/analyze.py`: if you change one, copy it again.
+
+### Step 3: List the packages Lambda needs
+
+Lambda's Python already includes `boto3`, but not `pymongo` or `nltk`. Chalice does not read `pyproject.toml`; it installs what `requirements.txt` lists. Put these two lines into `requirements.txt`:
+
+```text
+pymongo
+nltk
+```
+
+### Step 4: Configure the deployment
+
+The repository provides the settings in `chalice-config.json`. Copy it over the file Chalice created, and put in your AWS account ID:
+
+```bash
+cp ../chalice-config.json .chalice/config.json
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+sed -i.bak "s/ACCOUNT_ID/$ACCOUNT/" .chalice/config.json
+cat .chalice/config.json
+```
+
+| Setting | Why |
+| --- | --- |
+| `"manage_iam_role": false` and `"iam_role_arn": "...:role/LabRole"` | the Learner Lab does not let Chalice create an IAM role, so the function uses `LabRole`, which may read S3 and Parameter Store |
+| `"lambda_memory_size": 1024` | memory in MB; Lambda also gives more CPU to functions with more memory. The default, 128 MB, is too little for `nltk` and a long book |
+| `"lambda_timeout": 300` | seconds a single run may take before Lambda stops it. The default, 60 seconds, is too short for the longest books |
+
+### Step 5: Write `app.py`
+
+Replace the example in `app.py` with a function that analyzes every `.txt` file uploaded to your bucket. You need these pieces:
+
+```python
+import logging
+
+from chalice import Chalice
+
+from chalicelib.analyze import analyze_book
+
+# Change mst3k to your computing ID: your public bucket from Lab 06
+BUCKET = "public-mst3k"
+
+app = Chalice(app_name="book-analyzer")
+# Show the logger.info lines of analyze.py in CloudWatch
+logging.getLogger().setLevel(logging.INFO)
+```
+
+An S3 trigger is a decorator above the function. Chalice then connects the function to the bucket's event notifications when you deploy:
+
+```python
+@app.on_s3_event(bucket=BUCKET, events=["s3:ObjectCreated:*"], suffix=".txt")
+def analyze_new_book(event):
+    ...
+```
+
+Write the body of `analyze_new_book` yourself: it calls `analyze_book()` from `analyze.py` with the bucket and the key of the uploaded file. Chalice passes them as `event.bucket` and `event.key`. Keep the name `analyze_new_book`: the deployed function is named after it.
+
+### Step 6: Deploy
 
 ```bash
 uv run chalice deploy
 ```
 
-Chalice packages `app.py`, `chalicelib/`, and `pymongo` (from `requirements.txt`), creates the function `book-analyzer-dev-analyze_new_book`, allows S3 to invoke it, and adds the event notification to your bucket. In the **AWS Console**, check **S3** → `public-mst3k` → **Properties** → **Event notifications**.
+Chalice packages `app.py`, `chalicelib/`, and the packages in `requirements.txt`, creates the function `book-analyzer-dev-analyze_new_book`, allows S3 to invoke it, and adds the event notification to your bucket. In the **AWS Console**, check **S3** → `public-mst3k` → **Properties** → **Event notifications**.
 
-### Step 3: Upload a new book
+### Step 7: Upload a new book
 
 Pick a book that is not among your 100, for example *The Adventures of Tom Sawyer*:
 
@@ -330,43 +506,113 @@ Wait a few seconds, then read the function's log:
 uv run chalice logs -n analyze_new_book
 ```
 
-The log shows `pg74.txt: ... words (lambda:book-analyzer-dev-analyze_new_book)`. **The first trigger on a bucket can take up to 10 minutes to become active.** If the log stays empty, wait, then upload the book again (`aws s3 cp pg74.txt s3://public-mst3k/`); after that, events arrive within seconds.
+The log shows `pg74.txt: ... words`. **The first trigger on a bucket can take up to 10 minutes to become active.** If the log stays empty, wait, then upload the book again (`aws s3 cp pg74.txt s3://public-mst3k/`); after that, events arrive within seconds.
 
-### Step 4: Check the database
+### Step 8: Check the database
 
 ```bash
 cd ..
-uv run report
+uv run python src/book_analysis/report.py
 ```
 
-**Runs by machine** now also has a row `lambda:book-analyzer-dev-analyze_new_book` with 1 book, and **Books analyzed by Lambda** shows its title, author, and statistics. The document count is now 101.
+**Runs by machine** now also has a row with 1 book: the host name of the Lambda environment, an internal address such as `169.254.26.229`. **Last processed books** lists `pg74.txt` first, with its title, author, and statistics. The document count is now 101.
 
 **Success:** The new book was analyzed by Lambda, triggered by your upload, with the same code that ran on EC2.
 
 Leave the app deployed. It costs nothing while no books arrive. To remove it later, run `uv run chalice delete` in `book-analyzer`.
 
+## Part 3: Add a query to the report
+
+`report.py` prints two tables from `gutenberg.books`. Add a third with a query of your own: write one function in `src/book_analysis/report.py` that prints a Markdown table, and call it at the end of `main()`, inside the `try` block (the client is closed after it, in `finally`), so `report.py` prints it too. Pick one of these suggestions, or a query of your own of the same size.
+
+**Suggestion 1: `vocabulary_extremes(books)`.** Which books have the most varied and the least varied vocabulary? Print two tables:
+
+1. the 5 books with the **highest** `vocabulary_ratio`
+2. the 5 books with the **lowest** `vocabulary_ratio`
+
+with the columns `file_name`, `title`, `word_count`, and `vocabulary_ratio`. Hints:
+
+- `books.find().sort("vocabulary_ratio", -1).limit(5)` returns the 5 documents with the highest value; `1` instead of `-1` sorts the other way.
+- You know `sort` and `limit` from `mongosh` ([Class 05: The `mongosh` CLI tool](https://github.com/ksiller/DS2022/blob/main/class/05-nosql/README.md#the-mongosh-cli-tool), under **Count and sort**). In PyMongo, `sort` takes the field name and the direction as two arguments instead of an object:
+
+  | `mongosh` | PyMongo |
+  | --- | --- |
+  | `db.books.find().sort({ vocabulary_ratio: -1 }).limit(5)` | `books.find().sort("vocabulary_ratio", -1).limit(5)` |
+
+- Look at how `last_processed()` adds `file_name` to each document.
+
+**Suggestion 2: `books_by_author(books)`.** Which authors have the most books in your collection? Print one table with the columns `author` and `books`, the authors with the most books first. Hints:
+
+- `runs_by_machine()` in `report.py` does the same for host names: `books.distinct(...)` returns every value of a field once, and `books.count_documents(...)` counts the documents that have one of them.
+- `rows.sort(key=lambda row: row["books"], reverse=True)` sorts a list of dictionaries by their `books` value, the largest first.
+
+For both: `print_table(columns, rows)` in `report.py` already prints a list of dictionaries as a Markdown table. Run `uv run python src/book_analysis/report.py` and look closely at your table: you need it for the submission.
+
+### Milestone 2: end of week 2
+
+- [ ] `uv run chalice logs -n analyze_new_book` (in `book-analyzer/`) shows `pg74.txt: ... words`.
+- [ ] `report.py` shows 101 documents, a row with 1 book for the Lambda environment, and the table of your query from Part 3.
+- [ ] `git status` lists `book-analyzer/` and `src/book_analysis/report.py` as changed or new.
+
+Then complete **My results** and submit.
+
 ## Submit your work
 
-Add a section `## My results` at the **top** of this `README.md` (above the title) with:
+Submit when all three parts are done. Add a section `## My results` at the **top** of this `README.md` (above the title), or complete the one you started in week 1, with:
 
-1. The last line of `uv run analyze` on EC2 (Part 1, Step 4).
-2. The complete output of `uv run report` after Part 2. It is already formatted as Markdown tables.
+1. The last line of `analyze.py` on EC2 (Part 1, Step 4).
+2. The complete output of `report.py` after Part 3. It is already formatted as Markdown tables.
 3. Two or three sentences: for 100 books at once and for one new book a day, would you use EC2 or Lambda, and why? Use the run time from item 1 and the `Duration` in the `REPORT` line of `chalice logs` to compare.
 4. One sentence: how do the EC2 instance and the Lambda function get your Atlas password, although it is in no file?
+5. In your own words, one or two sentences each:
+   - Why does `analyze.py` have to be in `chalicelib/`?
+   - What would happen if `nltk` were missing from `requirements.txt`, and where would you see it?
+   - What in your code tells AWS to run the function when a book is uploaded?
+6. Two or three sentences about the table of your query from Part 3:
+   - `vocabulary_extremes`: is `vocabulary_ratio` a fair way to compare the vocabulary of two books? Use the `word_count` in your tables.
+   - `books_by_author`: do all author names and counts look right? Find one that does not, and explain where it comes from (hint: the `Author:` line of the book's file).
+   - Your own query: what does it show, and is there anything in the data that could make it misleading?
 
-Commit your README and the two files you changed in Part 2, and push:
+Commit your README, your Chalice app, and your report, and push:
 
 ```bash
-git add README.md book-analyzer/app.py book-analyzer/.chalice/config.json
+git add README.md book-analyzer/ src/book_analysis/report.py
 git commit -m "Complete Lab 07: EC2 and Lambda"
 git push origin main
 ```
 
 `config.json` now contains your account ID. That is not a secret. Check with `git status` that no `.pem` file, no `.aws/` folder, and no `.bak` file is staged.
 
-Submit the URL of your fork in the Canvas assignment: `https://github.com/YOUR_USERNAME/lab-07-ec2-lambda`
+Submit the URL of your fork in the Canvas assignment, once, for Parts 1-3: `https://github.com/YOUR_USERNAME/lab-07-ec2-lambda`
 
 > **Keep your Lab 06 bucket, the `gutenberg` database, and the `0.0.0.0/0` access list entry.** Do not click **Reset** in the Learner Lab. Lab 08 reads the same books and adds to the same documents.
+
+## Using Claude Code
+
+You may use [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) for this lab. Start it in your clone (`claude`). It reads [CLAUDE.md](CLAUDE.md) in this repository, which tells it about the Learner Lab and your Atlas cluster, so you do not have to explain them yourself.
+
+The goal is that you can build and debug a Lambda function, not that Claude Code can. Ask it to explain before it changes anything, and read every `aws` and `chalice` command before you let it run one.
+
+**Prompts for building the app (Part 2):**
+
+- "Explain what `chalice new-project` created in `book-analyzer/` and what each file is for. Don't change anything yet."
+- "Why does my own code have to go into `chalicelib/`? What does Chalice upload to Lambda?"
+- "I wrote `analyze_new_book` in `book-analyzer/app.py`. Check it against `analyze_book()` in `chalicelib/analyze.py` and tell me what is wrong, without fixing it."
+- "What does `@app.on_s3_event` create in AWS when I run `chalice deploy`?"
+
+**Prompts for the query (Part 3):**
+
+- "Explain how `print_table()` and `main()` in `report.py` turn MongoDB documents into a Markdown table."
+- "How do I sort a PyMongo `find()` by a field and keep only the first 5 results?"
+- "Explain what `distinct()` and `count_documents()` return in `runs_by_machine()`."
+
+**Prompts for troubleshooting:**
+
+- "Here is the output of `uv run chalice logs -n analyze_new_book`: [paste]. What is the cause? Explain it before you suggest a fix."
+- "My upload did not trigger the function. Give me the commands to check each step, from the S3 event notification to the function's log, one at a time."
+- "`chalice deploy` failed with: [paste]. Is this a problem in my code, in `.chalice/config.json`, or in the Learner Lab's permissions?"
+
+**Never paste** your Atlas password, the contents of `~/.aws/credentials`, or your `.pem` key into a prompt. Do not let Claude Code answer the questions in **My results** for you: they are graded on your own understanding.
 
 ## Troubleshooting
 
@@ -374,16 +620,16 @@ Submit the URL of your fork in the Canvas assignment: `https://github.com/YOUR_U
 
 - `ExpiredToken` **or** `InvalidClientTokenId`**.** Your lab session changed. Paste a fresh block from **AWS Details** → **AWS CLI** into `~/.aws/credentials`.
 - `NoSuchBucket` **or** `The specified bucket does not exist`**.** The bucket name in your command (or in `BUCKET` in `book-analyzer/app.py`) is not your Lab 06 bucket. Did you replace `mst3k` with your computing ID? In the **AWS Console**, open **S3** → **General purpose buckets** and find the public bucket you created in Lab 06, or list your buckets with `aws s3 ls`. Use exactly that name. If the bucket is missing, make sure you are in the same Learner Lab account and region (`us-east-1`) as in Lab 06; if it is really gone, recreate it with your Lab 06 script.
-- `Cannot read SSM parameter /lab07/mongodb`**.** The parameter does not exist in this account, or you created it in a region other than `us-east-1`. Repeat [Setup step 5](#5-store-your-atlas-settings-in-ssm-parameter-store).
+- `Cannot read SSM parameter /lab07/mongodb_credentials`**.** The parameter does not exist in this account, or you created it in a region other than `us-east-1`. Repeat [Setup step 5](#5-store-your-atlas-settings-in-ssm-parameter-store).
 
 **MongoDB Atlas**
 
 - **Your Atlas cluster is paused.** Atlas pauses free clusters that have not been used for a while. Every connection then fails with `ServerSelectionTimeoutError`, on your computer, on EC2, and in Lambda. In the Atlas web interface, open **Database** → **Clusters**: a paused cluster shows **Paused** and a **Resume** button. Click **Resume**, wait until the cluster is active again (a few minutes), and rerun your command. Nothing in your data or your settings changes.
-- `ServerSelectionTimeoutError` **on EC2 or in Lambda, but not on your computer.** Atlas refuses the address. Check that the **IP Access List** contains `0.0.0.0/0` (Setup step 4). New entries take a minute to become active.
-- `ServerSelectionTimeoutError` **everywhere, and the cluster is not paused.** The URL is wrong. Print the parameter with `aws ssm get-parameter --name /lab07/mongodb --with-decryption --query Parameter.Value --output text` and compare it with `echo $MONGODB_ATLAS_URL` and with the connection string in Atlas.
-- `Authentication failed`**.** The user or password in `/lab07/mongodb` (or in your environment variables) does not match the database user in Atlas **Database Access**. Fix it and repeat Setup step 5.
-- `KeyError: 'MONGODB_ATLAS_USER'` **on your computer.** Only some of the three Lab 05 variables are set in this terminal. Run `source ~/.zshrc` (or `~/.bashrc`) and check all three with `echo`.
-- `json.decoder.JSONDecodeError`**.** The value of `/lab07/mongodb` is not valid JSON, usually because of a `"` or `\` in the password. See Setup step 5.
+- `ServerSelectionTimeoutError` **on EC2 or in Lambda, but not on your computer.** Atlas refuses the address; the message usually contains `SSL handshake failed` and `TLSV1_ALERT_INTERNAL_ERROR`. Check that the **IP Access List** contains `0.0.0.0/0` (Setup step 4). New entries take a minute to become active.
+- `ServerSelectionTimeoutError` **everywhere, and the cluster is not paused.** The URL is wrong. Print the parameter with `aws ssm get-parameter --name /lab07/mongodb_credentials --with-decryption --query Parameter.Value --output text` and compare it with `echo $MONGODB_ATLAS_URL` and with the connection string in Atlas.
+- `Authentication failed`**.** The user or password in `/lab07/mongodb_credentials` (or in your environment variables) does not match the database user in Atlas **Database Access**. Fix it and repeat Setup step 5.
+- `KeyError: 'MONGODB_ATLAS_USER'` **on your computer.** Only some of the three Lab 05 variables are set in this terminal. Check that all three are in your `~/.zshrc` or `~/.bashrc`, close your terminal and open a new one, and confirm with `printenv | grep -i mongo`.
+- `json.decoder.JSONDecodeError`**.** The value of `/lab07/mongodb_credentials` is not valid JSON, usually because of a `"` or `\` in the password. See Setup step 5.
 
 **EC2 (Part 1)**
 
@@ -391,13 +637,19 @@ Submit the URL of your fork in the Canvas assignment: `https://github.com/YOUR_U
 - `ssh`**:** `Connection refused`**.** The instance is still booting. Wait 30 seconds and retry.
 - `uv: command not found` **on the instance.** The bootstrap has not finished. Run `cloud-init status --wait` and try again. If it still fails, check the end of `/var/log/cloud-init-output.log`.
 - `NoCredentialsError` **on the instance.** The instance was launched without `--iam-instance-profile`. From your computer: `aws ec2 associate-iam-instance-profile --instance-id "$IID" --iam-instance-profile Name=LabInstanceProfile`, wait a minute, and retry.
-- **The instance reports `local:ip-...` instead of `ec2:i-...`.** Very unlikely; it means the instance metadata service did not answer. Run the analysis again.
 
 **Lambda and Chalice (Part 2)**
 
-- `chalice deploy`**:** `iam:CreateRole` **or** `ACCOUNT_ID` **in an error message.** `.chalice/config.json` still contains the placeholder. Repeat Part 2, Step 1.
-- **The upload does not trigger the function.** See the 10-minute note in Part 2, Step 3. Also check that the key ends in `.txt` and that **S3 → Properties → Event notifications** lists the rule.
-- `Task timed out after 60.00 seconds` **in** `chalice logs`**.** The function could not reach Atlas in time. Check that your cluster is not paused and that `0.0.0.0/0` is in the IP Access List (see **MongoDB Atlas** above).
+- `chalice deploy`**:** `iam:CreateRole` **or** `ACCOUNT_ID` **in an error message.** `.chalice/config.json` is still the one from `chalice new-project`, or it still contains the placeholder. Repeat Part 2, Step 4.
+- `Runtime.ImportModuleError: Unable to import module 'app': No module named 'chalicelib'` **in** `chalice logs`**.** The folder is not called exactly `chalicelib`, it is not inside `book-analyzer/`, or `chalicelib/__init__.py` is missing. See Part 2, Step 2, and deploy again.
+- `No module named 'pymongo'` **or** `No module named 'nltk'` **in** `chalice logs`**.** The package is missing from `requirements.txt`. See Part 2, Step 3, and deploy again.
+- **The upload does not trigger the function.** See the 10-minute note in Part 2, Step 7. Also check that the key ends in `.txt` and that **S3 → Properties → Event notifications** lists the rule.
+- `Task timed out after 300.00 seconds` **in** `chalice logs`**.** The function could not reach Atlas in time. Check that your cluster is not paused and that `0.0.0.0/0` is in the IP Access List (see **MongoDB Atlas** above).
+- `Task timed out after 60.00 seconds` **in** `chalice logs`**.** `.chalice/config.json` does not have `"lambda_timeout": 300`. Copy `chalice-config.json` again (Part 2, Step 4) and run `uv run chalice deploy` again.
+
+**NLTK**
+
+- `LookupError: Resource wordnet not found` **(or** `averaged_perceptron_tagger_eng`**).** The NLTK data could not be downloaded, usually because the machine had no internet connection at that moment. Run the analysis again, or upload the book again for Lambda.
 
 ## Limitations of this approach
 
@@ -405,4 +657,5 @@ Submit the URL of your fork in the Canvas assignment: `https://github.com/YOUR_U
 - Lambda analyzes new uploads only. A book you delete from the bucket keeps its document in MongoDB, and `index.html` from Lab 06 does not list new books.
 - Atlas accepts connections from any address (`0.0.0.0/0`), so the database password is the only protection. Production systems give their servers fixed addresses or private network connections instead.
 - Each Lambda environment opens its own connection to Atlas. Hundreds of uploads at once would mean hundreds of connections to a free cluster.
-- The analysis only counts words. What a book is about, its summary and genre, needs language models; Lab 08 adds them on UVA HPC.
+- The analysis only counts words and lemmas. What a book is about, its summary and genre, needs language models. **Coming up in Lab 08:** more comprehensive analytics on UVA HPC, where AI models read every book and add a summary, its genre, and an estimate of when it was first published to the same documents.
+- `host` is only a name. Two machines can have the same name, and the name of a Lambda environment does not say which function it belongs to.

@@ -1,35 +1,19 @@
 #!/usr/bin/env python3
-"""Print the proof of completion for Lab 07: where each book in gutenberg.books was analyzed.
+"""Print the proof of completion for Lab 07: on which machines the books in gutenberg.books were analyzed.
 
-Run on your computer after each part: uv run report
+Run on your computer after each part: uv run python src/book_analysis/report.py
 """
 
-from datetime import datetime
+import logging
 
-from book_analysis.analyze import get_books
+from pymongo.errors import PyMongoError
 
-# One row per machine: how many books it analyzed, and when
-RUNS_BY_MACHINE = [
-    {"$unwind": "$runs"},
-    {"$group": {
-        "_id": "$runs.by",
-        "books": {"$addToSet": "$_id"},
-        "first": {"$min": "$runs.at"},
-        "last": {"$max": "$runs.at"},
-    }},
-    {"$project": {"_id": 0, "by": "$_id", "books": {"$size": "$books"}, "first": 1, "last": 1}},
-    {"$sort": {"first": 1}},
-]
+from book_analysis.analyze import COLLECTION, DATABASE, connect
 
-# The books that a Lambda function analyzed
-LAMBDA_BOOKS = {"runs.by": {"$regex": "^lambda:"}}
+logger = logging.getLogger(__name__)
 
-
-def cell(value):
-    """Format one table cell; times to the second, in UTC."""
-    if isinstance(value, datetime):
-        return value.strftime("%Y-%m-%d %H:%M:%S UTC")
-    return str(value)
+# How many of the last processed books to list
+LAST_PROCESSED = 5
 
 
 def print_table(columns, rows):
@@ -37,19 +21,47 @@ def print_table(columns, rows):
     print("| " + " | ".join(columns) + " |")
     print("|" + "---|" * len(columns))
     for row in rows:
-        print("| " + " | ".join(cell(row.get(c, "")) for c in columns) + " |")
+        print("| " + " | ".join(str(row.get(c, "")) for c in columns) + " |")
+
+
+def runs_by_machine(books):
+    """Return one row per machine: its host name and how many books it analyzed."""
+    rows = []
+    # every host name that appears in any document's runs list
+    for host in books.distinct("runs.host"):
+        # matches a book if any of its runs has this host name
+        count = books.count_documents({"runs.host": host})
+        rows.append({"host": host, "books": count})
+    return rows
+
+
+def last_processed(books):
+    """Return the books that were processed last, the latest first."""
+    rows = []
+    # sorting by runs.at from newest to oldest uses each book's latest run
+    for doc in books.find().sort("runs.at", -1).limit(LAST_PROCESSED):
+        doc["file_name"] = doc["_id"]
+        doc["runs"] = len(doc["runs"])  # how many times the book was analyzed
+        rows.append(doc)
+    return rows
 
 
 def main():
     """Print both tables, ready to paste into README.md."""
-    books = get_books()
-    print(f"### gutenberg.books: {books.count_documents({})} documents\n")
-    print("### Runs by machine\n")
-    print_table(["by", "books", "first", "last"], books.aggregate(RUNS_BY_MACHINE))
-    print("\n### Books analyzed by Lambda\n")
-    rows = [{**doc, "file_name": doc["_id"], "runs": len(doc["runs"])}
-            for doc in books.find(LAMBDA_BOOKS)]
-    print_table(["file_name", "title", "author", "word_count", "vocabulary_ratio", "runs"], rows)
+    client = connect()
+    try:
+        books = client[DATABASE][COLLECTION]
+        print(f"### gutenberg.books: {books.count_documents({})} documents\n")
+        print("### Runs by machine\n")
+        print_table(["host", "books"], runs_by_machine(books))
+        print("\n### Last processed books\n")
+        print_table(["file_name", "title", "author", "word_count", "unique_lemmas", "vocabulary_ratio", "runs"],
+                    last_processed(books))
+    except PyMongoError as e:
+        logger.error("Cannot read from MongoDB: %s", e)
+        raise
+    finally:
+        client.close()  # closes the connections to Atlas, also after an error
 
 
 if __name__ == "__main__":
