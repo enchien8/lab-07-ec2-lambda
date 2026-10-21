@@ -49,9 +49,7 @@ def main():
     print("\n### Books analyzed by Lambda\n")
     rows = [{**doc, "file_name": doc["_id"], "runs": len(doc["runs"])}
             for doc in books.find(LAMBDA_BOOKS)]
-    print_table(["file_name", "word_count", "unique_words", "vocabulary_ratio", "runs"], rows)
-    for row in rows:
-        print(f"\n**{row['file_name']}:** {row.get('summary', '')}")
+    print_table(["file_name", "title", "author", "word_count", "vocabulary_ratio", "runs"], rows)
 
 
 if __name__ == "__main__":

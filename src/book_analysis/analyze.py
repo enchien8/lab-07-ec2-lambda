@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize the books in an S3 bucket and store one document per book in MongoDB.
+"""Analyze the books in an S3 bucket and store one document per book in MongoDB.
 
 The same code runs on your computer, on an EC2 instance (uv run analyze), and in
 AWS Lambda (book-analyzer/app.py calls analyze_book). The documents go into the
@@ -22,7 +22,6 @@ import re
 import socket
 import time
 import urllib.request
-from collections import Counter
 from datetime import datetime, timezone
 
 import boto3
@@ -113,65 +112,50 @@ def download(bucket, key):
     return obj["Body"].read().decode("utf-8", errors="replace")
 
 
+def read_header(text):
+    """Return title, author, language, and release date from the Project Gutenberg header.
+
+    The release date is when Project Gutenberg published the eBook, not when the
+    book was written. A field the header does not have is left out.
+    """
+    fields = {"title": "Title", "author": "Author", "language": "Language",
+              "gutenberg_release": "Release [Dd]ate"}
+    header = text[:5000]  # the header is at the very top of the file
+    metadata = {}
+    for name, label in fields.items():
+        match = re.search(rf"^{label}:\s*(.+?)\s*$", header, re.MULTILINE)
+        if match:
+            # "June 1, 1998 [eBook #1342]" -> "June 1, 1998"
+            metadata[name] = re.sub(r"\s*\[.*\]$", "", match.group(1))
+    return metadata
+
+
 def strip_gutenberg(text):
-    """Return only the book itself, without Project Gutenberg's header and license."""
+    """Return only the book itself, without Project Gutenberg's header and license.
+
+    Every Gutenberg file marks the book with a line "*** START OF THE PROJECT
+    GUTENBERG EBOOK ... ***" before it and "*** END OF THE PROJECT GUTENBERG EBOOK"
+    after it. Without these lines, the whole text is returned.
+    """
     start = re.search(r"\*\*\* ?START OF TH(E|IS) PROJECT GUTENBERG EBOOK.*?\*\*\*", text)
     end = re.search(r"\*\*\* ?END OF TH(E|IS) PROJECT GUTENBERG EBOOK", text)
     return text[start.end() if start else 0 : end.start() if end else len(text)]
 
 
-# Words too common to say anything about a book; they do not count toward a sentence's score
-STOPWORDS = set("""
-a about after again all also am an and any are as at be been before being but by can could
-did do does down for from had has have he her here him his how i if in into is it its just
-me more my no not now of on once one only or other our out over said she so some than that
-the their them then there these they this to too up upon very was we were what when where
-which while who will with would you your
-""".split())
-
-
-def summarize(text, sentences=3):
-    """Return the most representative sentences of a book, in their original order.
-
-    An extractive summary: it picks sentences from the book instead of writing new
-    ones. Each sentence scores the average frequency of its words in the whole book,
-    so sentences about the book's main topics and characters score highest.
-    """
-    words = [w for w in re.findall(r"[a-z']+", text.lower()) if w not in STOPWORDS]
-    freq = Counter(words)
-    # Gutenberg wraps lines at about 70 characters: join them before splitting sentences
-    flat = " ".join(text.split())
-    # A sentence ends at . ! or ? (plus closing quotes), but not after a title such as "Mr."
-    candidates = re.split(
-        r"(?<!\bMr\.)(?<!\bMrs\.)(?<!\bDr\.)(?<!\bSt\.)(?:(?<=[.!?])|(?<=[.!?][”’\"']))\s+(?=[“‘\"'_A-Z])",
-        flat,
-    )
-
-    scored = []
-    for position, sentence in enumerate(candidates):
-        content = [w for w in re.findall(r"[a-z']+", sentence.lower()) if w not in STOPWORDS]
-        # Narrative sentences of medium length make the best summaries; skip dialogue
-        if 12 <= len(sentence.split()) <= 45 and content and not re.search(r"[“”\"]", sentence):
-            score = sum(freq[w] for w in content) / len(content)
-            scored.append((score, position, sentence))
-
-    best = sorted(scored, reverse=True)[:sentences]
-    return " ".join(sentence for _, _, sentence in sorted(best, key=lambda s: s[1]))
-
-
 def process(text):
-    """Return word statistics and a short summary for one book.
+    """Return metadata and word statistics for one book.
 
     A word is a run of letters and apostrophes, compared in lowercase.
     """
+    metadata = read_header(text)
     text = strip_gutenberg(text)
     words = re.findall(r"[a-z']+", text.lower())
     unique = len(set(words))
     return {
+        **metadata,
         "word_count": len(words),
         "unique_words": unique,
         "vocabulary_ratio": unique / len(words) if words else 0.0,
-        "summary": summarize(text),
     }
 
 
@@ -199,7 +183,7 @@ def analyze_book(bucket, key):
 def main():
     """Analyze every book in the bucket given on the command line."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    parser = argparse.ArgumentParser(description="Summarize the books in an S3 bucket into MongoDB.")
+    parser = argparse.ArgumentParser(description="Analyze the books in an S3 bucket and store the results in MongoDB.")
     parser.add_argument("bucket", help="S3 bucket with the books, for example public-mst3k")
     parser.add_argument("--limit", type=int, help="only process the first N books (for testing)")
     args = parser.parse_args()

@@ -63,10 +63,13 @@ Each book becomes one document in the collection `books` of the database `gutenb
 ```json
 {
   "_id": "pg11.txt",
-  "word_count": 30478,
-  "unique_words": 3013,
-  "vocabulary_ratio": 0.0989,
-  "summary": "It was, no doubt: only Alice did not like to be told so. And she squeezed herself up closer to Alice’s side as she spoke. Alice looked down at them, and considered a little before she gave her answer.",
+  "title": "Alice's Adventures in Wonderland",
+  "author": "Lewis Carroll",
+  "language": "English",
+  "gutenberg_release": "June 27, 2008",
+  "word_count": 27427,
+  "unique_words": 2575,
+  "vocabulary_ratio": 0.0939,
   "runs": [
     {"by": "local:my-laptop",       "at": "2026-10-27T14:41:05Z"},
     {"by": "ec2:i-0123456789abcdef0", "at": "2026-10-27T15:02:11Z"}
@@ -76,15 +79,16 @@ Each book becomes one document in the collection `books` of the database `gutenb
 
 | Field | Meaning |
 | --- | --- |
+| `title`, `author`, `language` | from the `Title:`, `Author:`, and `Language:` lines at the top of the file |
+| `gutenberg_release` | when Project Gutenberg published the eBook (`Release date:`), **not** when the book was written |
 | `word_count` | how many words are in the book (a word is a run of letters and apostrophes, in lowercase) |
 | `unique_words` | how many distinct words are in the book |
 | `vocabulary_ratio` | `unique_words / word_count`: a rough measure of how varied the wording is |
-| `summary` | the three sentences that best represent the book (see below) |
 | `runs` | **one entry per analysis**: where it ran (`ec2:<instance id>`, `lambda:<function name>`, or `local:<computer name>`) and when |
 
-Before counting, `strip_gutenberg()` removes Project Gutenberg's header and license text, so only the book itself is analyzed.
+`read_header()` takes the metadata from the header that every Project Gutenberg file starts with. Then `strip_gutenberg()` removes that header and the license text at the end, so only the book itself is counted. The files do not say when a book was first published or what genre it is.
 
-`summarize()` writes an **extractive** summary: it picks existing sentences instead of writing new ones. Each sentence scores the average frequency of its words in the whole book (ignoring very common words such as *the* or *and*), so sentences about the main characters and topics win. The three best sentences are kept in their original order. It is simple and fast, and the summaries are rough. In Lab 08 a transformer model writes **abstractive** summaries, new text in its own words, into the same documents.
+> **Coming up in Lab 08:** more comprehensive analytics on UVA HPC. AI models will read every book and add a summary, its genre, and an estimate of when it was first published to the same documents.
 
 `save()` in `analyze.py` writes each document with one `update_one(..., upsert=True)`: `$set` replaces the statistics, and `$push` appends the run to `runs`. A second run updates the numbers and keeps the history. Lab 08 adds more fields to the same documents.
 
@@ -120,22 +124,32 @@ uv run analyze --help
 
 1. On the AWS Academy **Learner Lab** page, click **Start Lab** and wait for the green **AWS** icon. **Do not click Reset**: it deletes your Lab 06 buckets.
 2. Click **AWS Details** → **AWS CLI** → **Show**, and paste the block into `~/.aws/credentials`. The credentials change with every lab session.
-3. Check that the CLI works and that your bucket has the books:
+3. Check that the CLI works and that your Lab 06 bucket still has the books:
 
    ```bash
    aws sts get-caller-identity
-   aws s3 ls s3://public-mst3k/ | head
+   aws s3 ls s3://public-mst3k/ | grep -c '\.txt$'
    ```
+
+   The second command counts the books. The number should be `100`. If the bucket is empty or missing, finish [Lab 06](https://github.com/ksiller/lab-06-s3) first.
 
 ### 4. Prepare your MongoDB Atlas cluster
 
-You use your Atlas cluster from [Lab 05](https://github.com/ksiller/lab-05-nosql). Check that the Lab 05 environment variables are still set in your terminal:
+You use your Atlas cluster from [Lab 05](https://github.com/ksiller/lab-05-nosql). First check that your `MONGODB_ATLAS_*` environment variables from Lab 05 are still set. You should see `MONGODB_ATLAS_URL`, `MONGODB_ATLAS_USER`, and `MONGODB_ATLAS_PWD`. The output includes your password, so do not run this while sharing your screen:
 
 ```bash
-echo "$MONGODB_ATLAS_URL" "$MONGODB_ATLAS_USER"
+printenv | grep -i mongo
 ```
 
-If they are empty, follow [MongoDB Atlas setup](https://github.com/ksiller/DS2022/blob/main/setup/mongodb.md) again. If the Atlas web interface shows your cluster as **Paused**, click **Resume** and wait a few minutes.
+If any of them is missing, follow [MongoDB Atlas setup](https://github.com/ksiller/DS2022/blob/main/setup/mongodb.md) again, or run `source ~/.zshrc` (or `~/.bashrc`) if you set them in a terminal that was open before.
+
+Then check that you can still reach your Atlas cluster. If the Atlas web interface shows it as **Paused**, click **Resume** and wait a few minutes:
+
+```bash
+mongosh "$MONGODB_ATLAS_URL" --apiVersion 1 --username "$MONGODB_ATLAS_USER" --eval "db.runCommand({ping: 1})"
+```
+
+Enter your Atlas password when asked. The output ends with `{ ok: 1 }`.
 
 **Allow access from anywhere.** In Lab 05 you allowed only UVA addresses. Your EC2 instance gets a new public address every time it starts, and a Lambda function has no fixed address at all, so Atlas must accept connections from any address. In the Atlas web interface, open **Security** → **Database & Network Access** → **IP Access List**, click **+ Add IP Address**, choose **Allow Access from Anywhere** (`0.0.0.0/0`), and confirm. Leave this entry in place for the rest of the semester: Lab 08 and Lab 10 need it too. From now on, your database user's password is the only thing that protects the cluster, so never commit it or share it.
 
@@ -183,9 +197,9 @@ env -u MONGODB_ATLAS_URL uv run analyze public-mst3k --limit 1
 
 ### Step 1: Read the bootstrap script
 
-Open [bootstrap.sh](bootstrap.sh). Passed to the instance as **user data**, it runs once, as root, when the instance boots for the first time. It installs `git` and `uv`, clones this repository into `/home/ubuntu/lab-07-ec2-lambda`, and runs `uv sync`. Answer for yourself:
+Open [bootstrap.sh](bootstrap.sh). Passed to the instance as **user data**, it runs once, as root, when the instance boots for the first time. It installs `git`, `curl`, Python 3 and `uv`, and clones this repository into `/home/ubuntu/lab-07-ec2-lambda`. Answer for yourself:
 
-- Why does it run `uv` and `git clone` with `runuser -u ubuntu` instead of as root?
+- Why does the script end with `chown`, and what would go wrong without it?
 - Why is there no database password and no AWS key in this file?
 
 ### Step 2: Launch the instance
@@ -231,10 +245,9 @@ You are now in the **shell on the instance** (prompt `ubuntu@ip-...`). The boots
 
 ```bash
 cloud-init status --wait
-cat ~/bootstrap-finished.txt
 ```
 
-`status: done` and the line `bootstrap finished ...` mean the software is installed and the repository is cloned. If the status is `error`, read the end of `/var/log/cloud-init-output.log`: every command of the bootstrap is printed there.
+`status: done` means the bootstrap has finished. If the status is `error`, or a later step fails, read the end of `/var/log/cloud-init-output.log`: the output of every command of the bootstrap is there.
 
 ### Step 4: Run the analysis
 
@@ -326,7 +339,7 @@ cd ..
 uv run report
 ```
 
-**Runs by machine** now also has a row `lambda:book-analyzer-dev-analyze_new_book` with 1 book, and **Books analyzed by Lambda** shows its statistics and summary. The document count is now 101.
+**Runs by machine** now also has a row `lambda:book-analyzer-dev-analyze_new_book` with 1 book, and **Books analyzed by Lambda** shows its title, author, and statistics. The document count is now 101.
 
 **Success:** The new book was analyzed by Lambda, triggered by your upload, with the same code that ran on EC2.
 
@@ -376,7 +389,7 @@ Submit the URL of your fork in the Canvas assignment: `https://github.com/YOUR_U
 
 - `run-instances`**:** `InvalidGroup.NotFound`**.** You have no security group `launch-wizard-1`. See Part 1, Step 2.
 - `ssh`**:** `Connection refused`**.** The instance is still booting. Wait 30 seconds and retry.
-- `uv: command not found` **on the instance.** The bootstrap has not finished, or your shell started before it did. Run `cloud-init status --wait`, then `exit` and log in again.
+- `uv: command not found` **on the instance.** The bootstrap has not finished. Run `cloud-init status --wait` and try again. If it still fails, check the end of `/var/log/cloud-init-output.log`.
 - `NoCredentialsError` **on the instance.** The instance was launched without `--iam-instance-profile`. From your computer: `aws ec2 associate-iam-instance-profile --instance-id "$IID" --iam-instance-profile Name=LabInstanceProfile`, wait a minute, and retry.
 - **The instance reports `local:ip-...` instead of `ec2:i-...`.** Very unlikely; it means the instance metadata service did not answer. Run the analysis again.
 
@@ -392,4 +405,4 @@ Submit the URL of your fork in the Canvas assignment: `https://github.com/YOUR_U
 - Lambda analyzes new uploads only. A book you delete from the bucket keeps its document in MongoDB, and `index.html` from Lab 06 does not list new books.
 - Atlas accepts connections from any address (`0.0.0.0/0`), so the database password is the only protection. Production systems give their servers fixed addresses or private network connections instead.
 - Each Lambda environment opens its own connection to Atlas. Hundreds of uploads at once would mean hundreds of connections to a free cluster.
-- The summaries only pick sentences that use the book's most frequent words. They often name the main characters but rarely tell the story. Lab 08 replaces them with summaries written by a transformer model.
+- The analysis only counts words. What a book is about, its summary and genre, needs language models; Lab 08 adds them on UVA HPC.
