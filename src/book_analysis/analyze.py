@@ -134,10 +134,11 @@ def find_marker(text, word):
     return -1
 
 
-def strip_gutenberg(text):
-    """Return only the book itself, without Project Gutenberg's header and license.
+def extract_book_text(text):
+    """Return the text of the book itself, from the full text of a Project Gutenberg file.
 
-    Every Gutenberg file marks the book with a line "*** START OF THE PROJECT
+    The file also contains Project Gutenberg's header before the book and its license
+    after it, which must not be counted. Every Gutenberg file marks the book with a line "*** START OF THE PROJECT
     GUTENBERG EBOOK ... ***" before it and "*** END OF THE PROJECT GUTENBERG EBOOK"
     after it. Without these lines, the whole text is returned.
     """
@@ -172,7 +173,7 @@ def process(text):
     A word is a run of letters and apostrophes, compared in lowercase.
     """
     metadata = read_header(text)
-    text = strip_gutenberg(text)
+    text = extract_book_text(text)
     words = re.findall(r"[a-z']+", text.lower())
     unique_lemmas = len(set(lemmatize(words)))
     return {

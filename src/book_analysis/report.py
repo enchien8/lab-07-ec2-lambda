@@ -47,7 +47,7 @@ def last_processed(books):
 
 
 def main():
-    """Print both tables, ready to paste into README.md."""
+    """Print the tables, ready to paste into RESULTS.md."""
     client = connect()
     try:
         books = client[DATABASE][COLLECTION]
