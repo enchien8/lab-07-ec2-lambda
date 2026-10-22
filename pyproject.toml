@@ -10,10 +10,6 @@ dependencies = [
     "pymongo>=4.19.0",
 ]
 
-[project.scripts]
-analyze = "book_analysis.analyze:main"
-report = "book_analysis.report:main"
-
 [dependency-groups]
 dev = [
     "chalice",
