@@ -166,9 +166,10 @@ mkdir -p ~/ds2022-fall-2026/
 cd ~/ds2022-fall-2026/
 git clone https://github.com/YOUR_USERNAME/lab-07-ec2-lambda.git
 cd lab-07-ec2-lambda
+pwd
 ```
 
-Do all of your work in this directory, in the **terminal on your computer** unless a step says otherwise.
+Your clone is now in `~/ds2022-fall-2026/lab-07-ec2-lambda`; `pwd` prints a path that ends with `ds2022-fall-2026/lab-07-ec2-lambda`. This README calls this folder *your clone*, and its *top folder* is where `README.md` is. Do all of your work in this folder or its subfolders, as guided by the step-by-step instructions below.
 
 ### 3. Python environment
 
@@ -467,16 +468,21 @@ aws ec2 terminate-instances --instance-ids "$IID"
 Save your progress in your fork on GitHub, so nothing is lost between the weeks:
 
 1. Create a file `RESULTS.md` in the top folder of your clone (next to `README.md`) and paste the line from the instance into it (see [Submit your work](#submit-your-work)). Leave `README.md` unchanged.
-2. Stage your results (`RESULTS.md` and `results/security-group.png`), check what is staged, commit, and push:
+2. Stage your results (`RESULTS.md` and `results/security-group.png`), and check what is staged:
 
    ```bash
    git add RESULTS.md results/
    git status
+   ```
+
+   `git status` must list only these two files as staged, and no `.pem` file, `.aws/` folder, or book file (`pg*.txt`). If something else is staged, take it out with `git restore --staged <file>`.
+
+3. Commit and push:
+
+   ```bash
    git commit -m "Lab 07: Part 1 done"
    git push origin main
    ```
-
-   `git status` must list only these two files as staged, and no `.pem` file, `.aws/` folder, or book file (`pg*.txt`).
 
 This is not a submission; you submit once, at the end of week 2.
 
@@ -826,16 +832,21 @@ Submit when Parts 1 and 2 are done, and Part 3 if you chose to do it. Complete t
 6. A screenshot of your Lambda function's S3 trigger, showing your bucket, the event type, and the `.txt` suffix ([Knowledge check](#knowledge-check), question 2). Save it as `results/lambda-trigger.png` and show it in `RESULTS.md` with `![Lambda trigger](results/lambda-trigger.png)`.
 7. A screenshot of your Lambda function's CloudWatch log, showing the line `pg74.txt: ... words` ([Knowledge check](#knowledge-check), question 3). Save it as `results/lambda-cloudwatch-log.png` and show it in `RESULTS.md` with `![Lambda CloudWatch log](results/lambda-cloudwatch-log.png)`.
 
-Commit your results, your Chalice app, and, if you did Part 3, your `query.py`, and push. `src/` stages `query.py` if it exists; otherwise nothing in it has changed:
+Stage your results, your Chalice app, and, if you did Part 3, your `query.py`, and check what is staged. `src/` stages `query.py` if it exists; otherwise nothing in it has changed:
 
 ```bash
 git add RESULTS.md results/ book-analyzer/ src/
 git status
+```
+
+`git status` must not list a `.pem` file, an `.aws/` folder, or a `.bak` file as staged. If it does, take the file out with `git restore --staged <file>`. `book-analyzer/.chalice/config.json` is staged and contains your account ID; that is not a secret and can be pushed to GitHub.
+
+Then commit and push:
+
+```bash
 git commit -m "Complete Lab 07: EC2 and Lambda"
 git push origin main
 ```
-
-`config.json` now contains your account ID. That is not a secret. Check in the output of `git status` that no `.pem` file, no `.aws/` folder, and no `.bak` file is staged.
 
 Submit the URL of your fork in the Canvas assignment, once, for the whole lab: `https://github.com/YOUR_USERNAME/lab-07-ec2-lambda`
 
@@ -843,7 +854,20 @@ Submit the URL of your fork in the Canvas assignment, once, for the whole lab: `
 
 ## Using Claude Code
 
-You may use [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) for this lab. Start it in your clone (`claude`). It reads [CLAUDE.md](CLAUDE.md) in this repository, which tells it about the Learner Lab and your Atlas cluster, so you do not have to explain them yourself.
+You may use [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) for this lab. Open a new terminal, so you can keep running your own commands in the other one. Change into your clone, and confirm with `pwd` that you are at the top level of this repository:
+
+```bash
+cd ~/ds2022-fall-2026/lab-07-ec2-lambda
+pwd
+```
+
+The output ends with `ds2022-fall-2026/lab-07-ec2-lambda`. Then start Claude Code:
+
+```bash
+claude
+```
+
+Claude Code reads [CLAUDE.md](CLAUDE.md) in this repository, which tells it about the Learner Lab and your Atlas cluster, so you do not have to explain them yourself.
 
 The goal is that you can build and debug a Lambda function, not that Claude Code can. Ask it to explain before it changes anything, and read every `aws` and `chalice` command before you let it run one.
 
