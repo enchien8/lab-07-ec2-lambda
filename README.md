@@ -171,7 +171,7 @@ cd lab-07-ec2-lambda
 pwd
 ```
 
-Your clone is now in `~/ds2022-fall-2026/lab-07-ec2-lambda`; `pwd` prints a path that ends with `ds2022-fall-2026/lab-07-ec2-lambda`. This README calls this folder *your clone*, and its *top folder* is where `README.md` is. Do all of your work in this folder or its subfolders, as guided by the step-by-step instructions below.
+Your cloned repository is now in `~/ds2022-fall-2026/lab-07-ec2-lambda`; `pwd` prints a path that ends with `ds2022-fall-2026/lab-07-ec2-lambda`. This README calls this folder *your cloned repository*, and its *top folder* is where `README.md` is. Do all of your work in this folder or its subfolders, as guided by the step-by-step instructions below.
 
 ### 3. Python environment
 
@@ -444,7 +444,7 @@ There is no `~/.aws/credentials` file and no `MONGODB_ATLAS_*` variable on the i
 
 ### Step 5: Check the database and terminate the instance
 
-Back in the **terminal on your computer**, in your clone:
+Back in the **terminal on your computer**, in your cloned repository:
 
 ```bash
 uv run python src/book_analysis/report.py
@@ -452,7 +452,7 @@ uv run python src/book_analysis/report.py
 
 The table **Runs by machine** now has a row `ip-172-31-...` with 100 books, next to the row of your computer from Setup. It is the host name of *your* instance, the same as in its prompt `ubuntu@ip-...`. The three books from your test have more than one entry in `runs`: the EC2 run updated their numbers and kept the history.
 
-Before you terminate the instance, take the screenshot for your submission: in the **AWS Console**, open **EC2** → **Instances** → your instance → **Security** tab, and save a screenshot of its security group's **inbound rules** as `results/security-group.png` (create the folder `results/` in your clone). See [Knowledge check](#knowledge-check), question 1.
+Before you terminate the instance, take the screenshot for your submission: in the **AWS Console**, open **EC2** → **Instances** → your instance → **Security** tab, and save a screenshot of its security group's **inbound rules** as `results/security-group.png` (create the folder `results/` in your cloned repository). See [Knowledge check](#knowledge-check), question 1.
 
 The job is done, so terminate the instance:
 
@@ -466,12 +466,12 @@ aws ec2 terminate-instances --instance-ids "$IID"
 
 - [ ] `report.py` shows a row `ip-172-31-...` with 100 books under **Runs by machine**.
 - [ ] You saved the last line of `analyze.py` from the instance (you need it for the submission, and the instance is gone).
-- [ ] You saved a screenshot of the **inbound rules** of your instance's security group as `results/security-group.png`, in a new folder `results/` in your clone ([Knowledge check](#knowledge-check), question 1). Take it before you terminate the instance: **EC2** → **Instances** → your instance → **Security** tab.
+- [ ] You saved a screenshot of the **inbound rules** of your instance's security group as `results/security-group.png`, in a new folder `results/` in your cloned repository ([Knowledge check](#knowledge-check), question 1). Take it before you terminate the instance: **EC2** → **Instances** → your instance → **Security** tab.
 - [ ] The instance is terminated: `aws ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].State.Name'` prints `"terminated"`.
 
 Save your progress in your fork on GitHub, so nothing is lost between the weeks:
 
-1. Create a file `RESULTS.md` in the top folder of your clone (next to `README.md`) and paste the line from the instance into it (see [Submit your work](#submit-your-work)). Leave `README.md` unchanged.
+1. Create a file `RESULTS.md` in the top folder of your cloned repository (next to `README.md`) and paste the line from the instance into it (see [Submit your work](#submit-your-work)). Leave `README.md` unchanged.
 2. Stage your results (`RESULTS.md` and `results/security-group.png`), and check what is staged:
 
    ```bash
@@ -498,7 +498,7 @@ This is not a submission; you submit once, at the end of week 2.
 
 ![Part 2: a Lambda function analyzes each new upload](docs/part2.png)
 
-In this part you build a Chalice app around a Lambda function. The function runs the same `analyze.py` you ran on EC2. Work in the **terminal on your computer**, in your clone.
+In this part you build a Chalice app around a Lambda function. The function runs the same `analyze.py` you ran on EC2. Work in the **terminal on your computer**, in your cloned repository.
 
 **What every Chalice app needs.** A Chalice app that runs your own code needs the same six adjustments, whatever triggers it. Steps 1 to 6 below make them for this lab:
 
@@ -513,7 +513,7 @@ Steps 7 and 8 test the app: trigger an event and check the result. In Lab 10 you
 
 ### Step 1: Create a Chalice project
 
-In the top folder of your clone:
+In the top folder of your cloned repository:
 
 ```bash
 uv run chalice new-project book-analyzer
@@ -682,7 +682,7 @@ Chalice packages `app.py`, `chalicelib/`, and the packages in `requirements.txt`
 
 If you change `app.py`, `analyze.py`, `requirements.txt`, or `.chalice/config.json` later, run `uv run chalice deploy` again: it updates the function in place. You do not need to delete anything first.
 
-Take the screenshot of the trigger for your submission now, and save it as `results/lambda-trigger.png` in the top folder of your clone ([Knowledge check](#knowledge-check), question 2).
+Take the screenshot of the trigger for your submission now, and save it as `results/lambda-trigger.png` in the top folder of your cloned repository ([Knowledge check](#knowledge-check), question 2).
 
 ### Step 7: Upload a new book
 
@@ -701,7 +701,7 @@ uv run chalice logs -n analyze_new_book
 
 The log shows `pg74.txt: ... words`. **The first trigger on a bucket can take up to 10 minutes to become active.** If the log stays empty, wait, then upload the book again (`aws s3 cp pg74.txt s3://public-mst3k/`); after that, events arrive within seconds.
 
-Next, go to the **AWS Console**, search for the **Lambda** service, and find the function `book-analyzer-dev-analyze_new_book`. Inspect its CloudWatch log: **Monitor** tab → **View CloudWatch logs** → the newest log stream. Take the screenshot for [Knowledge check](#knowledge-check) question 3 now, while the log is fresh: save it as `results/lambda-cloudwatch-log.png` in the top folder of your clone.
+Next, go to the **AWS Console**, search for the **Lambda** service, and find the function `book-analyzer-dev-analyze_new_book`. Inspect its CloudWatch log: **Monitor** tab → **View CloudWatch logs** → the newest log stream. Take the screenshot for [Knowledge check](#knowledge-check) question 3 now, while the log is fresh: save it as `results/lambda-cloudwatch-log.png` in the top folder of your cloned repository.
 
 ### Step 8: Check the database
 
@@ -803,7 +803,7 @@ with the columns `file_name`, `title`, `word_count`, and `vocabulary_ratio`. Hin
 - `runs_by_machine()` in `report.py` does the same for host names: `books.distinct(...)` returns every value of a field once, and `books.count_documents(...)` counts the documents that have one of them.
 - `rows.sort(key=lambda row: row["books"], reverse=True)` sorts a list of dictionaries by their `books` value, the largest first.
 
-For both: `print_table(columns, rows)`, imported from `report.py`, prints a list of dictionaries as a Markdown table. Run your script from the top folder of your clone:
+For both: `print_table(columns, rows)`, imported from `report.py`, prints a list of dictionaries as a Markdown table. Run your script from the top folder of your cloned repository:
 
 ```bash
 uv run python src/book_analysis/query.py
@@ -828,7 +828,7 @@ By the end of this lab, you should be able to answer the following questions. Ea
 
 ## Submit your work
 
-Submit when Parts 1 and 2 are done, and Part 3 if you chose to do it. Complete the file `RESULTS.md` you started in week 1, in the top folder of your clone (create it if you have not yet), with the items below. Do not change `README.md`.
+Submit when Parts 1 and 2 are done, and Part 3 if you chose to do it. Complete the file `RESULTS.md` you started in week 1, in the top folder of your cloned repository (create it if you have not yet), with the items below. Do not change `README.md`.
 
 1. The last line of `analyze.py` on EC2 (Part 1, Step 4).
 2. The complete output of `report.py` after Part 2. It is already formatted as Markdown tables.
@@ -860,7 +860,7 @@ Submit the URL of your fork in the Canvas assignment, once, for the whole lab: `
 
 ## Using Claude Code
 
-You may use [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) for this lab. Open a new terminal, so you can keep running your own commands in the other one. Change into your clone, and confirm with `pwd` that you are at the top level of this repository:
+You may use [Claude Code](https://docs.claude.com/en/docs/claude-code/overview) for this lab. Open a new terminal, so you can keep running your own commands in the other one. Change into your cloned repository, and confirm with `pwd` that you are at the top level of this repository:
 
 ```bash
 cd ~/ds2022-fall-2026/lab-07-ec2-lambda
