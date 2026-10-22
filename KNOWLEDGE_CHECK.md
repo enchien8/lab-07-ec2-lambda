@@ -1,52 +1,57 @@
 # Lab 07: Knowledge check
 
-Answer each question below it, in your own words, in one to three sentences. Replace the `...` after **Your answer:** with your text, and fill in the measured times in question 4. Your screenshots and reports go into the folder `results/` (see [Submit your work](README.md#submit-your-work) in the README).
+**Answer each question below it, in your own words, in one to three sentences.** Replace the `...` below **Your answer:** with your text. Questions 1 to 3 also ask for a screenshot, which goes into the folder `results/`.
 
 Questions 1 to 3 describe **hypothetical** problems: they may not have happened to you, but they are common, and you should know where to look when they do.
 
-## 1. EC2: you cannot log in via `ssh`
+## 1. EC2: why can't I log in with `ssh`?
 
-You launch your EC2 instance. AWS reports that it has been provisioned and gives you its public IP address, but you cannot log in via `ssh`. You suspect that the security group does not allow SSH access on port 22 (the default) from all IP addresses. Where in the AWS Console would you check?
+Suppose your instance is running and has a public IP address, but `ssh` cannot connect. A common cause is the instance's security group: a firewall that decides which connections reach the instance.
 
-Screenshot: `results/security-group.png`, the inbound rules of your instance's security group, showing what they should look like when properly configured for this project (Part 1, Step 5).
+**Your task:** find the place in the AWS Console that shows which connections your instance's security group lets in. Take a screenshot of it and save it as `results/security-group.png`. (The security group is still there after you terminated the instance.)
 
 *Hint:* the lecture slides, and [class/07-ec2](https://github.com/ksiller/DS2022/blob/main/class/07-ec2/README.md), part [3. Launch an EC2 instance in the AWS Console + SSH](https://github.com/ksiller/DS2022/blob/main/class/07-ec2/README.md#3-launch-an-ec2-instance-in-the-aws-console--ssh-15-min) and [Troubleshooting](https://github.com/ksiller/DS2022/blob/main/class/07-ec2/README.md#troubleshooting).
 
-**Your answer:** ...
+**Your answer:** Which path did you take in the console (service → page → tab)?
 
-## 2. Lambda: the function did not trigger
+...
 
-You deployed the Chalice app and uploaded a new book to S3. Several minutes later, you query MongoDB and still do not see a document for the book. You suspect the Lambda function did not trigger. Where in the AWS Console would you check the function's configuration and its trigger?
+## 2. Lambda: why didn't my function run?
 
-Screenshot: `results/lambda-trigger.png`, your function's S3 trigger, showing your bucket, the event type, and the `.txt` suffix (Part 2, Step 6).
+Suppose you uploaded a new book to your bucket, but several minutes later MongoDB still has no document for it. Maybe the function never started, because its trigger is missing or wrong.
+
+**Your task:** find the place in the AWS Console that shows what starts your Lambda function. Take a screenshot of it and save it as `results/lambda-trigger.png`.
 
 *Hint:* the class demo [A Lambda function in the AWS Console](https://github.com/ksiller/DS2022/blob/main/demos/07-lambda/README.md), steps [5. Add the S3 trigger](https://github.com/ksiller/DS2022/blob/main/demos/07-lambda/README.md#5-add-the-s3-trigger) and [8. Preview: the same steps with Chalice](https://github.com/ksiller/DS2022/blob/main/demos/07-lambda/README.md#8-preview-the-same-steps-with-chalice).
 
-**Your answer:** ...
+**Your answer:** Which path did you take in the console (service → page → tab)?
 
-## 3. Lambda logs: the function failed while it ran
+...
 
-You uploaded a new book, and the function's **Monitor** tab shows that it was invoked, but MongoDB still has no document for the book. You suspect the function failed while it ran. Where would you find its error message?
+## 3. Lambda: where do I find the error?
 
-Screenshot: `results/lambda-cloudwatch-log.png`, your function's CloudWatch log, showing the line `pg74.txt: ... words` (Part 2, Step 7).
+Suppose the function did start, but MongoDB still has no document for the book. Then the function failed while it ran, and its error message is in its log.
+
+**Your task:** find the place in the AWS Console where your Lambda function's log is, and open the log of the run for `pg74.txt`. Take a screenshot that shows the line `pg74.txt: ... words`, and save it as `results/lambda-cloudwatch-log.png`.
 
 *Hint:* [Part 2, Step 7](README.md#step-7-upload-a-new-book) in the README, and the class demo [A Lambda function in the AWS Console](https://github.com/ksiller/DS2022/blob/main/demos/07-lambda/README.md), step [7. Check the CloudWatch logs](https://github.com/ksiller/DS2022/blob/main/demos/07-lambda/README.md#7-check-the-cloudwatch-logs).
 
-**Your answer:** ...
+**Your answer:** Which path did you take in the console (service → page → tab)?
 
-## 4. EC2 or Lambda?
+...
 
-Would you use EC2 or Lambda to analyze 100 books at once? Which would you use to analyze one new book a day? Explain your choices with the two times you measured.
+## 4. EC2 or Lambda: a backlog or new uploads?
 
-- EC2 run time for 100 books, from the last line of `analyze.py` on the instance (Part 1, Step 4): ... s
-- Lambda `Duration` for one book, from the `REPORT` line of `chalice logs` (Part 2, Step 7): ... ms
+Which would you use, EC2 or Lambda, in each of these two cases? Explain each choice in one or two sentences.
 
-**Your answer:** ...
+- **Case A, a backlog:** a library gives you 5,000 more books. They are already in your bucket, and you need to analyze them once.
+- **Case B, new uploads:** readers upload new books at random times, a few each day. Each book should be analyzed within a minute after its upload.
 
-## 5. Only if you did the optional Part 3: your query
+For comparison, typical times in this lab:
 
-How does your query function in `src/book_analysis/query.py` work? Which PyMongo methods does it call (`find`, `sort`, `limit`, `distinct`, `count_documents`), what does each one return, and what does your function return?
+- **EC2** (`t3.micro`): about 20 seconds for all 100 books, plus a few minutes to start the instance and run the bootstrap. The instance costs money for every minute it runs, also while it waits.
+- **Lambda** (512 MB): about 2 seconds for one book, including about 1 second to start the function the first time (a cold start). The function runs, and costs, only while a book is analyzed.
 
-Output: `results/query.json`
+**Your answer:**
 
-**Your answer:** ...
+...

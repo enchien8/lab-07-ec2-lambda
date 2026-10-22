@@ -75,7 +75,7 @@ lab-07-ec2-lambda/
 └── CLAUDE.md                   # background for Claude Code, if you use it
 ```
 
-You add these yourself: the Chalice app `book-analyzer/` (Part 2), the folder `results/` with your report and screenshots, and, if you do the optional Part 3, `src/book_analysis/query.py`. You write your answers into `KNOWLEDGE_CHECK.md`. `README.md` stays as it is.
+You add these yourself: the Chalice app `book-analyzer/` (Part 2), the folder `results/` with your report and screenshots for your submission, and, if you do the optional Part 3, `src/book_analysis/query.py`. You write your answers into `KNOWLEDGE_CHECK.md`. `README.md` stays as it is.
 
 The two scripts in `src/book_analysis/`:
 
@@ -442,9 +442,15 @@ The log lists each book. The last line looks like this:
 Processed 100 books from s3://public-mst3k in 19.7 s on ip-172-31-5-20
 ```
 
-**Write the run time** from this line into question 4 of `KNOWLEDGE_CHECK.md` now; once you terminate the instance, the line is gone. Then log out with `exit`.
+**How did the instance get access without credentials?** There is no `~/.aws/credentials` file and no `MONGODB_ATLAS_*` variable on the instance. Instead, the instance runs with the IAM role `LabRole`, which you attached at launch with `--iam-instance-profile` (Step 2): AWS gives code on the instance temporary credentials for this role, automatically. To see it, ask AWS who the instance is. Still on the instance, run:
 
-There is no `~/.aws/credentials` file and no `MONGODB_ATLAS_*` variable on the instance. Check how the code still gets access: `uv run python -c "import boto3; print(boto3.client('sts').get_caller_identity()['Arn'])"` prints an ARN with `assumed-role/LabRole/`. With that role, `analyze.py` reads S3 and the Atlas settings in `mongodb_credentials`.
+```bash
+uv run python -c "import boto3; print(boto3.client('sts').get_caller_identity()['Arn'])"
+```
+
+The output is an ARN that contains `assumed-role/LabRole/`, followed by your instance ID: the instance acts as `LabRole`. With this role, `analyze.py` may read the books from S3 and the Atlas settings from the SSM parameter `mongodb_credentials`.
+
+Then log out with `exit`.
 
 ### Step 5: Check the database and terminate the instance
 
@@ -455,8 +461,6 @@ uv run python src/book_analysis/report.py
 ```
 
 `runs_by_machine` now has an entry `ip-172-31-...` with 100 books, next to the entry of your computer from Setup. It is the host name of *your* instance, the same as in its prompt `ubuntu@ip-...`. The three books from your test have more than one entry in `runs`: the EC2 run updated their numbers and kept the history.
-
-Before you terminate the instance, take the screenshot for your submission: in the **AWS Console**, open **EC2** → **Instances** → your instance → **Security** tab, and save a screenshot of its security group's **inbound rules** as `results/security-group.png` (create the folder `results/` in your cloned repository). See [Knowledge check](#knowledge-check), question 1.
 
 The job is done, so terminate the instance:
 
@@ -469,29 +473,7 @@ aws ec2 terminate-instances --instance-ids "$IID"
 ### Milestone 1: end of week 1
 
 - [ ] `report.py` shows an entry `ip-172-31-...` with 100 books in `runs_by_machine`.
-- [ ] You wrote the EC2 run time into question 4 of `KNOWLEDGE_CHECK.md`.
-- [ ] You saved a screenshot of the **inbound rules** of your instance's security group as `results/security-group.png`, in a new folder `results/` in your cloned repository ([Knowledge check](#knowledge-check), question 1). Take it before you terminate the instance: **EC2** → **Instances** → your instance → **Security** tab.
 - [ ] The instance is terminated: `aws ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].State.Name'` prints `"terminated"`.
-
-Save your progress in your fork on GitHub, so nothing is lost between the weeks:
-
-1. Stage your progress (`KNOWLEDGE_CHECK.md` and `results/security-group.png`), and check what is staged:
-
-   ```bash
-   git add KNOWLEDGE_CHECK.md results/
-   git status
-   ```
-
-   `git status` must list only these two files as staged, and no `.pem` file, `.aws/` folder, or book file (`pg*.txt`). If something else is staged, take it out with `git restore --staged <file>`.
-
-2. Commit and push:
-
-   ```bash
-   git commit -m "Lab 07: Part 1 done"
-   git push origin main
-   ```
-
-This is not a submission; you submit once, at the end of week 2.
 
 > **Before you continue in week 2:** start the Learner Lab and paste fresh credentials into `~/.aws/credentials` (they expired), and check that your Atlas cluster is not paused (Setup step 1). Your bucket, the books' documents, and the parameter `mongodb_credentials` are still there.
 
@@ -685,8 +667,6 @@ Chalice packages `app.py`, `chalicelib/`, and the packages in `requirements.txt`
 
 If you change `app.py`, `analyze.py`, `requirements.txt`, or `.chalice/config.json` later, run `uv run chalice deploy` again: it updates the function in place. You do not need to delete anything first.
 
-Take the screenshot of the trigger for your submission now, and save it as `results/lambda-trigger.png` in the top folder of your cloned repository ([Knowledge check](#knowledge-check), question 2).
-
 ### Step 7: Upload a new book
 
 Pick a book that is not among your 100, for example *The Adventures of Tom Sawyer*:
@@ -704,9 +684,7 @@ uv run chalice logs -n analyze_new_book
 
 The log shows `pg74.txt: ... words`. **The first trigger on a bucket can take up to 10 minutes to become active.** If the log stays empty, wait, then upload the book again (`aws s3 cp pg74.txt s3://public-mst3k/`); after that, events arrive within seconds.
 
-The `REPORT` line after it shows how long the run took, for example `Duration: 1929.02 ms`. Write this `Duration` into question 4 of `KNOWLEDGE_CHECK.md`.
-
-Next, go to the **AWS Console**, search for the **Lambda** service, and find the function `book-analyzer-dev-analyze_new_book`. Inspect its CloudWatch log: **Monitor** tab → **View CloudWatch logs** → the newest log stream. Take the screenshot for [Knowledge check](#knowledge-check) question 3 now, while the log is fresh: save it as `results/lambda-cloudwatch-log.png` in the top folder of your cloned repository.
+Next, go to the **AWS Console**, search for the **Lambda** service, and find the function `book-analyzer-dev-analyze_new_book`. Inspect its CloudWatch log: **Monitor** tab → **View CloudWatch logs** → the newest log stream.
 
 ### Step 8: Check the database
 
@@ -811,6 +789,7 @@ db.books.find({ author: "Mark Twain" }, { title: 1, bucket: 1, runs: 1 })
 **Save the report for your submission.** Run `report.py` once more and redirect its output into a file, then check the file with `jq`; it prints `101` if the file is complete:
 
 ```bash
+mkdir -p results
 uv run python src/book_analysis/report.py > results/report.json
 jq '.documents' results/report.json
 ```
@@ -824,10 +803,7 @@ Leave the app deployed. It costs nothing while no books arrive. To remove it lat
 - [ ] `uv run chalice logs -n analyze_new_book` (in `book-analyzer/`) shows `pg74.txt: ... words`.
 - [ ] `report.py` shows `"documents": 101` and an entry with 1 book for the Lambda environment in `runs_by_machine`.
 - [ ] `report.py --author` lists the book you uploaded, with the Lambda environment's host in its `runs`.
-- [ ] You saved a screenshot of your Lambda function's S3 trigger as `results/lambda-trigger.png` ([Knowledge check](#knowledge-check), question 2).
-- [ ] You saved a screenshot of your Lambda function's CloudWatch log as `results/lambda-cloudwatch-log.png` ([Knowledge check](#knowledge-check), question 3).
 - [ ] You saved the report as `results/report.json`, and `jq '.documents' results/report.json` prints `101`.
-- [ ] You wrote the Lambda `Duration` into question 4 of `KNOWLEDGE_CHECK.md`.
 - [ ] `git status` lists `book-analyzer/` as new.
 
 **Congratulations, you did it! As a last step, complete the [Knowledge check](#knowledge-check) below and [submit](#submit-your-work).** If you want to go further first, Part 3 is optional.
@@ -902,7 +878,7 @@ For both: the skeleton prints your function's result as JSON, like `report.py`. 
 uv run python src/book_analysis/query.py
 ```
 
-When it works, save its output for your submission, and explain how your function works in question 5 of `KNOWLEDGE_CHECK.md`:
+When it works, save its output for your submission:
 
 ```bash
 uv run python src/book_analysis/query.py > results/query.json
@@ -911,7 +887,6 @@ uv run python src/book_analysis/query.py > results/query.json
 ### Milestone 3 (optional)
 
 - [ ] `query.py` prints the result of your query, and you saved it as `results/query.json`.
-- [ ] You answered question 5 in `KNOWLEDGE_CHECK.md`.
 - [ ] `git status` lists `src/book_analysis/query.py` as new.
 
 Then complete the [Knowledge check](#knowledge-check) below and [submit](#submit-your-work).
@@ -920,11 +895,10 @@ Then complete the [Knowledge check](#knowledge-check) below and [submit](#submit
 
 The questions are in [KNOWLEDGE_CHECK.md](KNOWLEDGE_CHECK.md), in the top folder of your cloned repository. Open it, and write your answer below each question, in your own words:
 
-1. **EC2:** where you would check why `ssh` cannot connect (screenshot: `results/security-group.png`)
-2. **Lambda:** where you would check why the function did not trigger (screenshot: `results/lambda-trigger.png`)
-3. **Lambda logs:** where you would find the error of a function that failed (screenshot: `results/lambda-cloudwatch-log.png`)
-4. **EC2 or Lambda?** which one you would use for 100 books at once and for one new book a day, with the two times you measured
-5. **Only if you did Part 3:** how your query function works
+1. **EC2:** find your instance's security group rules in the AWS Console (screenshot: `results/security-group.png`)
+2. **Lambda:** find what starts your Lambda function (screenshot: `results/lambda-trigger.png`)
+3. **Lambda logs:** find your function's log (screenshot: `results/lambda-cloudwatch-log.png`)
+4. **EC2 or Lambda?** which one you would use for a backlog of books already in the bucket, and which for new books uploaded a few at a time
 
 Questions 1 to 3 describe hypothetical problems: they may not have happened to you, but they are common, and you should know where to look when they do.
 
@@ -932,14 +906,14 @@ Questions 1 to 3 describe hypothetical problems: they may not have happened to y
 
 Submit when Parts 1 and 2 are done, and Part 3 if you chose to do it. Your submission is in your cloned repository; do not change `README.md`.
 
-- `KNOWLEDGE_CHECK.md`, with your answers to all questions (question 5 only if you did Part 3).
+- `KNOWLEDGE_CHECK.md`, with your answers to all four questions.
 - The folder `results/`:
 
   | File | From |
   | --- | --- |
-  | `security-group.png` | Part 1, Step 5 |
-  | `lambda-trigger.png` | Part 2, Step 6 |
-  | `lambda-cloudwatch-log.png` | Part 2, Step 7 |
+  | `security-group.png` | Knowledge check, question 1 |
+  | `lambda-trigger.png` | Knowledge check, question 2 |
+  | `lambda-cloudwatch-log.png` | Knowledge check, question 3 |
   | `report.json` | Part 2, Step 8 |
   | `query.json` | Part 3, only if you did it |
 
