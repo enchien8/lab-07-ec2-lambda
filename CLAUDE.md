@@ -11,7 +11,7 @@ full instructions.
   explain each part. Prefer helping the student write it over writing it for them.
 - When something fails, find the cause first (logs, error message, the failing step), explain
   it, then suggest a fix.
-- Do not write the answers in RESULTS.md, and do not change README.md. The answers are graded
+- Do not write the answers in KNOWLEDGE_CHECK.md, and do not change README.md. The answers are graded
   on the student's own understanding.
 
 ## The environment
