@@ -76,7 +76,10 @@ lab-07-ec2-lambda/
 
 You add three things yourself: the Chalice app `book-analyzer/` (Part 2), and `RESULTS.md` with the folder `results/` for your submission. `README.md` stays as it is.
 
-You run the two scripts in `src/book_analysis/` with `uv run python`, from the top folder of your clone. `uv run python src/book_analysis/analyze.py public-mst3k` analyzes every `.txt` file in the bucket. `uv run python src/book_analysis/report.py` prints what is in your database. `uv run` uses the project's environment, with all packages from `pyproject.toml`.
+The two scripts in `src/book_analysis/`:
+
+- `analyze.py` analyzes the books in your bucket: on your computer in Setup step 7, and on EC2 in Part 1, Step 4. In Part 2, your Lambda function runs its function `analyze_book()`.
+- `report.py` prints what is in your database: in Setup step 7, Part 1, Step 5, and Part 2, Step 8.
 
 ## What is computed
 
@@ -176,7 +179,7 @@ uv sync
 uv run python src/book_analysis/analyze.py --help
 ```
 
-`uv sync` also downloads Python 3.13 if you do not have it. If `uv` is missing, install it with [Installing uv](https://docs.astral.sh/uv/getting-started/installation/).
+`uv run` runs a command in this environment, with all packages from `pyproject.toml`; you use it for every Python command in this lab. `uv sync` also downloads Python 3.13 if you do not have it. If `uv` is missing, install it with [Installing uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ### 4. Start the Learner Lab and configure the AWS CLI
 
@@ -206,7 +209,7 @@ uv run python src/book_analysis/analyze.py --help
 
    If a file is missing or looks different, follow [AWS CLI configuration](https://github.com/ksiller/lab-06-s3#4-aws-cli-configuration-temporary-credentials) in Lab 06.
 
-4. Check that the CLI works and that your Lab 06 bucket still has the books:
+4. Check that the CLI works and that your Lab 06 bucket still has the books. **Replace `public-mst3k`** with the name of your bucket from Lab 06.
 
    ```bash
    aws sts get-caller-identity
@@ -267,7 +270,7 @@ In the next step you run `analyze.py` on your computer. Parts 1 and 2 run the sa
 | `main()`               | **entry point when you run** `analyze.py`: analyzes every book in the bucket, one after another (your computer, EC2)                                          | `uv run python src/book_analysis/analyze.py` |
 | `analyze_book()`       | **entry point for Lambda**: analyzes one book                                                                                                                 | your `app.py` (Part 2)                       |
 
-**Look at a book file first.** `analyze.py` reads the structure that every Project Gutenberg file has. Print the first 30 lines of one of your books; `aws s3 cp` with `-` as the target prints the file to the terminal instead of saving it:
+**Look at a book file first.** `analyze.py` reads the structure that every Project Gutenberg file has. Print the first 30 lines of one of your books; `aws s3 cp` with `-` as the target prints the file to the terminal instead of saving it. **Replace `public-mst3k`** with the name of your bucket from Lab 06.
 
 ```bash
 aws s3 cp s3://public-mst3k/pg11.txt - | head -n 30
@@ -328,7 +331,7 @@ Answer for yourself:
 
 ### 7. Test on your computer
 
-Analyze three books from your computer, then print the report:
+Analyze three books from your computer, then print the report. **Replace `public-mst3k`** with the name of your bucket from Lab 06.
 
 ```bash
 uv run python src/book_analysis/analyze.py public-mst3k --limit 3
@@ -368,7 +371,7 @@ IID=$(aws ec2 run-instances \
   --security-groups launch-wizard-1 \
   --iam-instance-profile Name=LabInstanceProfile \
   --user-data file://bootstrap.sh \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=lab07-mst3k}]' \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=lab07}]' \
   --query 'Instances[0].InstanceId' --output text)
 echo "Instance ID: $IID"
 ```
@@ -417,7 +420,7 @@ Each of the first four commands prints a version number. `ls` lists the files of
 
 ### Step 4: Run the analysis
 
-Still on the instance:
+Still on the instance. **Replace `public-mst3k`** with the name of your bucket from Lab 06.
 
 ```bash
 cd ~/lab-07-ec2-lambda
@@ -662,7 +665,7 @@ uv run chalice deploy
 
 Chalice packages `app.py`, `chalicelib/`, and the packages in `requirements.txt`, creates the function `book-analyzer-dev-analyze_new_book`, allows S3 to invoke it, and adds the event notification to your bucket. In the **AWS Console**, check:
 
-- **The S3 trigger:** **S3** → `public-mst3k` → **Properties** → **Event notifications** lists a notification for `.txt` files that sends events to `book-analyzer-dev-analyze_new_book`.
+- **The S3 trigger:** **S3** → `public-mst3k` (or whatever your bucket name is) → **Properties** → **Event notifications** lists a notification for `.txt` files that sends events to `book-analyzer-dev-analyze_new_book`.
 - **The Lambda function:** **Lambda** → **Functions** → `book-analyzer-dev-analyze_new_book`. The **Function overview** shows **S3** as its trigger, and **Configuration** → **General configuration** shows 512 MB of memory and a timeout of 1 min.
 
 If you change `app.py`, `analyze.py`, `requirements.txt`, or `.chalice/config.json` later, run `uv run chalice deploy` again: it updates the function in place. You do not need to delete anything first.
@@ -675,7 +678,7 @@ Pick a book that is not among your 100, for example *The Adventures of Tom Sawye
 
 ```bash
 curl -sSo pg74.txt https://www.gutenberg.org/cache/epub/74/pg74.txt
-aws s3 cp pg74.txt s3://public-mst3k/
+aws s3 cp pg74.txt s3://public-mst3k/   # replace with your bucket name
 ```
 
 Wait a few seconds, then read the function's log:
