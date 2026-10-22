@@ -79,7 +79,7 @@ You add these yourself: the Chalice app `book-analyzer/` (Part 2), `RESULTS.md` 
 The two scripts in `src/book_analysis/`:
 
 - `analyze.py` analyzes the books in your bucket: on your computer in Setup step 7, and on EC2 in Part 1, Step 4. In Part 2, your Lambda function runs its function `analyze_book()`.
-- `report.py` prints what is in your database: in Setup step 7, Part 1, Step 5, and Part 2, Step 8.
+- `report.py` prints what is in your database, as JSON: in Setup step 7, Part 1, Step 5, and Part 2, Step 8.
 
 ## What is computed
 
@@ -94,6 +94,7 @@ The two scripts in `src/book_analysis/`:
   "word_count": 27427,
   "unique_words": 2575,
   "vocabulary_ratio": 0.0939,
+  "bucket": "public-mst3k",
   "runs": [
     {"host": "my-laptop",      "at": "2026-10-27T14:41:05Z"},
     {"host": "ip-172-31-5-20", "at": "2026-10-27T15:02:11Z"}
@@ -104,6 +105,7 @@ The two scripts in `src/book_analysis/`:
 | Field                         | Meaning                                                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `_id`                         | the object key of the corresponding book text file in your S3 bucket, for example `pg11.txt`                        |
+| `bucket`                      | the name of that S3 bucket, for example `public-mst3k`: with `_id`, it says where the book file is                  |
 | `title`, `author`, `language` | from the `Title:`, `Author:`, and `Language:` lines at the top of the file                                          |
 | `word_count`                  | how many words are in the book (a word is a run of letters and apostrophes, in lowercase)                           |
 | `unique_words`                | how many distinct words are in the book                                                                             |
@@ -341,7 +343,7 @@ uv run python src/book_analysis/analyze.py public-mst3k --limit 3
 uv run python src/book_analysis/report.py
 ```
 
-The report shows one row with your computer's name and 3 books. If this works, S3 and Atlas are set up correctly. In `mongosh` (as in Lab 05), `use gutenberg` and `db.books.findOne()` show one of the documents.
+The report is one JSON document: `documents` is 3, `runs_by_machine` has one entry with your computer's name and 3 books, and `last_processed` shows the documents themselves, as MongoDB stores them. If this works, S3 and Atlas are set up correctly. In `mongosh` (as in Lab 05), `use gutenberg` and `db.books.findOne()` show one of the documents.
 
 **Test the Atlas settings in Parameter Store.** The EC2 instance and the Lambda function do not have your `MONGODB_ATLAS_*` environment variables. When `MONGODB_ATLAS_URL` is not set, `analyze.py` reads your Atlas settings from the SSM parameter `mongodb_credentials` instead (Setup step 5). Test this before you launch the instance, by running `analyze.py` once without that variable:
 
@@ -450,7 +452,7 @@ Back in the **terminal on your computer**, in your cloned repository:
 uv run python src/book_analysis/report.py
 ```
 
-The table **Runs by machine** now has a row `ip-172-31-...` with 100 books, next to the row of your computer from Setup. It is the host name of *your* instance, the same as in its prompt `ubuntu@ip-...`. The three books from your test have more than one entry in `runs`: the EC2 run updated their numbers and kept the history.
+`runs_by_machine` now has an entry `ip-172-31-...` with 100 books, next to the entry of your computer from Setup. It is the host name of *your* instance, the same as in its prompt `ubuntu@ip-...`. The three books from your test have more than one entry in `runs`: the EC2 run updated their numbers and kept the history.
 
 Before you terminate the instance, take the screenshot for your submission: in the **AWS Console**, open **EC2** → **Instances** → your instance → **Security** tab, and save a screenshot of its security group's **inbound rules** as `results/security-group.png` (create the folder `results/` in your cloned repository). See [Knowledge check](#knowledge-check), question 1.
 
@@ -464,7 +466,7 @@ aws ec2 terminate-instances --instance-ids "$IID"
 
 ### Milestone 1: end of week 1
 
-- [ ] `report.py` shows a row `ip-172-31-...` with 100 books under **Runs by machine**.
+- [ ] `report.py` shows an entry `ip-172-31-...` with 100 books in `runs_by_machine`.
 - [ ] You saved the last line of `analyze.py` from the instance (you need it for the submission, and the instance is gone).
 - [ ] You saved a screenshot of the **inbound rules** of your instance's security group as `results/security-group.png`, in a new folder `results/` in your cloned repository ([Knowledge check](#knowledge-check), question 1). Take it before you terminate the instance: **EC2** → **Instances** → your instance → **Security** tab.
 - [ ] The instance is terminated: `aws ec2 describe-instances --instance-ids "$IID" --query 'Reservations[0].Instances[0].State.Name'` prints `"terminated"`.
@@ -710,7 +712,7 @@ cd ..
 uv run python src/book_analysis/report.py
 ```
 
-Look at **Runs by machine**: it now has three rows, one for each computer that ran the same `analyze.py`:
+Look at `runs_by_machine`: it now has three entries, one for each computer that ran the same `analyze.py`:
 
 | Host | Books | Which machine |
 | --- | --- | --- |
@@ -718,26 +720,88 @@ Look at **Runs by machine**: it now has three rows, one for each computer that r
 | `ip-172-31-...` | 100 | your EC2 instance, in Part 1 |
 | an internal address such as `169.254.18.253` | 1 | the Lambda environment that analyzed `pg74.txt` |
 
-The books add up to 104, but the document count is 101: the three books from your test were analyzed twice, on your computer and on EC2, and each document's `runs` list keeps both. If you upload more books, Lambda may use another environment, which shows up as another row.
+The books add up to 104, but the document count is 101: the three books from your test were analyzed twice, on your computer and on EC2, and each document's `runs` list keeps both. If you upload more books, Lambda may use another environment, which shows up as another entry.
 
-Now query the database for the book you uploaded, to confirm that the trigger worked. `report.py --author` lists only the books by one author, and the machine that processed each of them last:
+Now query the database for the book you uploaded, to confirm that the trigger worked. `report.py --author` prints the documents of all books by one author:
 
 ```bash
 uv run python src/book_analysis/report.py --author "Mark Twain"
 ```
 
-```text
-### Books by Mark Twain
-
-| file_name | title | word_count | last_processed_on |
-|---|---|---|---|
-| pg1837.txt | The Prince and the Pauper | 71688 | ip-172-31-... |
-| pg74.txt | The Adventures of Tom Sawyer, Complete | 74383 | 169.254.... |
+```json
+[
+  {
+    "_id": "pg1837.txt",
+    "title": "The Prince and the Pauper",
+    "author": "Mark Twain",
+    "language": "English",
+    "word_count": 71688,
+    "unique_words": 7735,
+    "vocabulary_ratio": 0.1079,
+    "bucket": "public-mst3k",
+    "runs": [
+      {
+        "host": "ip-172-31-...",
+        "at": "2026-10-27 20:04:11.312000"
+      }
+    ]
+  },
+  {
+    "_id": "pg74.txt",
+    "title": "The Adventures of Tom Sawyer, Complete",
+    ...
+    "bucket": "public-mst3k",
+    "runs": [
+      {
+        "host": "169.254....",
+        "at": "2026-10-27 20:12:11.415000"
+      }
+    ]
+  }
+]
 ```
 
-`pg74.txt` was processed by Lambda, *The Prince and the Pauper* from your 100 books by your EC2 instance. If you uploaded a different book, use its author, exactly as on the `Author:` line at the top of the file.
+This is what MongoDB returns: documents, not rows of a table. Each document has its own fields, and `runs` is a list of subdocuments inside it, one per analysis. The `_id` of each document is the key of the book's object in your S3 bucket, so `bucket` and `_id` together give the location of the original book text, for example `s3://public-mst3k/pg74.txt`. The `runs` of `pg74.txt` show the host of the Lambda environment; *The Prince and the Pauper*, one of your 100 books, was processed by your EC2 instance. If you uploaded a different book, use its author, exactly as on the `Author:` line at the top of the file.
 
-**Last processed books** lists `pg74.txt` first, with its title, author, and statistics.
+`last_processed` in the full report starts with `pg74.txt`.
+
+**Optional: filter the report with `jq`.** The output is one JSON document, so you can pipe it into `jq`, which you used in [Class 05: Data](https://github.com/ksiller/DS2022/blob/main/class/05-data/README.md). For example:
+
+```bash
+uv run python src/book_analysis/report.py | jq '.runs_by_machine'
+uv run python src/book_analysis/report.py | jq '.last_processed[] | {title, words: .word_count}'
+uv run python src/book_analysis/report.py --author "Mark Twain" | jq '.[] | {_id, last_host: .runs[-1].host}'
+```
+
+The last filter picks the host of each book's latest run, the last entry of its `runs` list:
+
+```json
+{
+  "_id": "pg1837.txt",
+  "last_host": "ip-172-31-..."
+}
+{
+  "_id": "pg74.txt",
+  "last_host": "169.254...."
+}
+```
+
+**Optional: look at the documents with `mongosh`.** If you have `mongosh` installed (Lab 05, and the connection check in Setup step 1), you can open your collection from the command line. Connect, and enter your Atlas password when asked:
+
+```bash
+mongosh "$MONGODB_ATLAS_URL" --apiVersion 1 --username "$MONGODB_ATLAS_USER"
+```
+
+At the `mongosh` prompt, switch to the database and query the collection:
+
+```javascript
+use gutenberg
+db.books.countDocuments()
+db.books.findOne({ _id: "pg74.txt" })
+db.books.find({ author: "Mark Twain" }, { title: 1, bucket: 1, runs: 1 })
+```
+
+`findOne` shows the whole document of the book you uploaded; the last command shows only the title, bucket, and runs of every book by Mark Twain. Leave `mongosh` with `exit`.
 
 **Success:** The new book was analyzed by Lambda, triggered by your upload, with the same code that ran on EC2.
 
@@ -746,8 +810,8 @@ Leave the app deployed. It costs nothing while no books arrive. To remove it lat
 ### Milestone 2: Lambda app deployed
 
 - [ ] `uv run chalice logs -n analyze_new_book` (in `book-analyzer/`) shows `pg74.txt: ... words`.
-- [ ] `report.py` shows 101 documents and a row with 1 book for the Lambda environment.
-- [ ] `report.py --author` lists the book you uploaded, processed on the Lambda environment's host.
+- [ ] `report.py` shows `"documents": 101` and an entry with 1 book for the Lambda environment in `runs_by_machine`.
+- [ ] `report.py --author` lists the book you uploaded, with the Lambda environment's host in its `runs`.
 - [ ] You saved a screenshot of your Lambda function's S3 trigger as `results/lambda-trigger.png` ([Knowledge check](#knowledge-check), question 2).
 - [ ] You saved a screenshot of your Lambda function's CloudWatch log as `results/lambda-cloudwatch-log.png` ([Knowledge check](#knowledge-check), question 3).
 - [ ] `git status` lists `book-analyzer/` as new.
@@ -756,38 +820,53 @@ Leave the app deployed. It costs nothing while no books arrive. To remove it lat
 
 ## Part 3 (optional): Write a query of your own
 
-**This part is optional.** If you want to practice your NoSQL MongoDB skills, write a new script `src/book_analysis/query.py` with your own query on `gutenberg.books`; `report.py` stays as it is. Start from this skeleton; it connects to Atlas, reuses `print_table()` from `report.py`, and closes the client at the end:
+**This part is optional.** If you want to practice your NoSQL MongoDB skills, write a new script `src/book_analysis/query.py` with your own query on `gutenberg.books`; `report.py` stays as it is. Start from this skeleton. It connects to Atlas the same way as your script in [Lab 05](https://github.com/ksiller/lab-05-nosql), with your `MONGODB_ATLAS_*` environment variables (`query.py` runs on your computer, where they are set), closes the client at the end, and prints the result as JSON:
 
 ```python
 #!/usr/bin/env python3
 """My own query on gutenberg.books."""
 
-from book_analysis.analyze import COLLECTION, DATABASE, connect
-from book_analysis.report import print_table
+import json
+import logging
+import os
+
+from pymongo import MongoClient
+from pymongo.errors import PyMongoError
+
+# Atlas settings from your environment variables, as in Lab 05
+MONGODB_ATLAS_URL = os.environ["MONGODB_ATLAS_URL"]
+MONGODB_ATLAS_USER = os.environ["MONGODB_ATLAS_USER"]
+MONGODB_ATLAS_PWD = os.environ["MONGODB_ATLAS_PWD"]
+
+logger = logging.getLogger(__name__)
 
 
 def main():
-    """Print the result of my query as a Markdown table."""
-    client = connect()
+    """Print the result of my query as JSON."""
+    client = MongoClient(MONGODB_ATLAS_URL, username=MONGODB_ATLAS_USER, password=MONGODB_ATLAS_PWD)
     try:
-        books = client[DATABASE][COLLECTION]
-        # TODO: call your query function and print its rows with print_table()
+        books = client["gutenberg"]["books"]
+        result = []  # TODO: replace [] with a call of your query function
+        print(json.dumps(result, indent=2, default=str))
+    except PyMongoError as e:
+        logger.error("Cannot query MongoDB: %s", e)
+        raise
     finally:
-        client.close()
+        client.close()  # closes the connections to Atlas, also after an error
 
 
 if __name__ == "__main__":
     main()
 ```
 
-Write one query function in `query.py`, above `main()`, and call it where the `TODO` is. Pick one of these suggestions, or a query of your own of the same size.
+Write one query function in `query.py`, above `main()`, that returns its result, and call it where the `TODO` is. Pick one of these suggestions, or a query of your own of the same size.
 
-**Suggestion 1:** `vocabulary_extremes(books)`**.** Which books have the most varied and the least varied vocabulary? Print two tables:
+**Suggestion 1:** `vocabulary_extremes(books)`**.** Which books have the most varied and the least varied vocabulary? Return two lists:
 
 1. the 5 books with the **highest** `vocabulary_ratio`
 2. the 5 books with the **lowest** `vocabulary_ratio`
 
-with the columns `file_name`, `title`, `word_count`, and `vocabulary_ratio`. Hints:
+with only the fields `title`, `word_count`, and `vocabulary_ratio` of each book, for example as `{"highest": [...], "lowest": [...]}`. Hints:
 
 - `books.find().sort("vocabulary_ratio", -1).limit(5)` returns the 5 documents with the highest value; `1` instead of `-1` sorts the other way.
 - You know `sort` and `limit` from `mongosh` ([Class 05: The `mongosh` CLI tool](https://github.com/ksiller/DS2022/blob/main/class/05-nosql/README.md#the-mongosh-cli-tool), under **Count and sort**). In PyMongo, `sort` takes the field name and the direction as two arguments instead of an object:
@@ -796,14 +875,14 @@ with the columns `file_name`, `title`, `word_count`, and `vocabulary_ratio`. Hin
   | --------------------------------------------------------- | ---------------------------------------------------- |
   | `db.books.find().sort({ vocabulary_ratio: -1 }).limit(5)` | `books.find().sort("vocabulary_ratio", -1).limit(5)` |
 
-- Look at how `last_processed()` in `report.py` adds `file_name` to each document.
+- A projection, the second argument of `find()`, keeps only some fields: `books.find({}, {"title": 1, "word_count": 1, "vocabulary_ratio": 1})`. `_id` is always included unless you add `"_id": 0`.
 
-**Suggestion 2:** `books_by_author(books)`**.** Which authors have the most books in your collection? Print one table with the columns `author` and `books`, the authors with the most books first. Hints:
+**Suggestion 2:** `books_by_author(books)`**.** Which authors have the most books in your collection? Return a list of entries such as `{"author": "Jane Austen", "books": 6}`, the authors with the most books first. Hints:
 
 - `runs_by_machine()` in `report.py` does the same for host names: `books.distinct(...)` returns every value of a field once, and `books.count_documents(...)` counts the documents that have one of them.
 - `rows.sort(key=lambda row: row["books"], reverse=True)` sorts a list of dictionaries by their `books` value, the largest first.
 
-For both: `print_table(columns, rows)`, imported from `report.py`, prints a list of dictionaries as a Markdown table. Run your script from the top folder of your cloned repository:
+For both: the skeleton prints your function's result as JSON, like `report.py`. Run your script from the top folder of your cloned repository:
 
 ```bash
 uv run python src/book_analysis/query.py
@@ -813,7 +892,7 @@ In the submission, you add its output and explain how your function works (item 
 
 ### Milestone 3 (optional)
 
-- [ ] `query.py` prints the table of your query.
+- [ ] `query.py` prints the result of your query.
 - [ ] `git status` lists `src/book_analysis/query.py` as new.
 
 Then complete the [Knowledge check](#knowledge-check) below and [submit](#submit-your-work).
@@ -831,9 +910,9 @@ By the end of this lab, you should be able to answer the following questions. Ea
 Submit when Parts 1 and 2 are done, and Part 3 if you chose to do it. Complete the file `RESULTS.md` you started in week 1, in the top folder of your cloned repository (create it if you have not yet), with the items below. Do not change `README.md`.
 
 1. The last line of `analyze.py` on EC2 (Part 1, Step 4).
-2. The complete output of `report.py` after Part 2. It is already formatted as Markdown tables.
+2. The complete output of `report.py` after Part 2. It is JSON: paste it into a code block that starts with ```` ```json ````, so GitHub shows it formatted.
 3. Would you use EC2 or Lambda to analyze 100 books at once? Which would you use to analyze one new book a day? Explain your choices in two or three sentences, using the run time from item 1 and the `Duration` in the `REPORT` line of `chalice logs`.
-4. Only if you did the optional Part 3: the output of `query.py`, and two or three sentences that explain how your query function works: which PyMongo methods does it call (`find`, `sort`, `limit`, `distinct`, `count_documents`), what does each one return, and how does your function turn the result into the rows that `print_table()` prints?
+4. Only if you did the optional Part 3: the output of `query.py`, and two or three sentences that explain how your query function works: which PyMongo methods does it call (`find`, `sort`, `limit`, `distinct`, `count_documents`), what does each one return, and what does your function return?
 5. A screenshot of the inbound rules of your EC2 instance's security group, showing SSH on port 22 ([Knowledge check](#knowledge-check), question 1). Save it as `results/security-group.png` and show it in `RESULTS.md` with `![Security group](results/security-group.png)`.
 6. A screenshot of your Lambda function's S3 trigger, showing your bucket, the event type, and the `.txt` suffix ([Knowledge check](#knowledge-check), question 2). Save it as `results/lambda-trigger.png` and show it in `RESULTS.md` with `![Lambda trigger](results/lambda-trigger.png)`.
 7. A screenshot of your Lambda function's CloudWatch log, showing the line `pg74.txt: ... words` ([Knowledge check](#knowledge-check), question 3). Save it as `results/lambda-cloudwatch-log.png` and show it in `RESULTS.md` with `![Lambda CloudWatch log](results/lambda-cloudwatch-log.png)`.
@@ -886,9 +965,9 @@ The goal is that you can build and debug a Lambda function, not that Claude Code
 
 **Prompts for the query (optional Part 3):**
 
-- "Explain the skeleton of `query.py` from the README: what do the two imports and the `try`/`finally` block do?"
+- "Explain the skeleton of `query.py` from the README: what do the imports, the `try`/`finally` block, and `json.dumps` do?"
 
-- "Explain how `print_table()` and `main()` in `report.py` turn MongoDB documents into a Markdown table."
+- "Explain how `main()` in `report.py` turns the documents from MongoDB into JSON, and why `json.dumps` needs `default=str`."
 - "How do I sort a PyMongo `find()` by a field and keep only the first 5 results?"
 - "Explain what `distinct()` and `count_documents()` return in `runs_by_machine()`."
 

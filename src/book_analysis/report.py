@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Print the proof of completion for Lab 07: on which machines the books in gutenberg.books were analyzed."""
+"""Print a report on gutenberg.books as JSON: on which machines the books were analyzed, and the last processed books."""
 
 import argparse
+import json
 import logging
 
 from pymongo.errors import PyMongoError
@@ -11,24 +12,11 @@ from book_analysis.analyze import COLLECTION, DATABASE, connect
 logger = logging.getLogger(__name__)
 
 # How many of the last processed books to list
-LAST_PROCESSED = 5
-
-
-def print_table(columns, rows):
-    """Print rows (dicts) as a Markdown table."""
-    print("| " + " | ".join(columns) + " |")
-    print("|" + "---|" * len(columns))
-    for row in rows:
-        cells = []
-        for c in columns:
-            # row.get(c, "") leaves the cell empty when a document has no such field,
-            # for example no vocabulary_ratio for an empty file
-            cells.append(str(row.get(c, "")))
-        print("| " + " | ".join(cells) + " |")
+LAST_PROCESSED = 3
 
 
 def runs_by_machine(books):
-    """Return one row per machine: its host name and how many books it analyzed."""
+    """Return one entry per machine: its host name and how many books it analyzed."""
     rows = []
     # every host name that appears in any document's runs list
     for host in books.distinct("runs.host"):
@@ -39,29 +27,19 @@ def runs_by_machine(books):
 
 
 def last_processed(books):
-    """Return the books that were processed last, the latest first."""
-    rows = []
+    """Return the documents of the books that were processed last, the latest first."""
     # sorting by runs.at from newest to oldest uses each book's latest run
-    for doc in books.find().sort("runs.at", -1).limit(LAST_PROCESSED):
-        doc["file_name"] = doc["_id"]
-        doc["runs"] = len(doc["runs"])  # how many times the book was analyzed
-        rows.append(doc)
-    return rows
+    return list(books.find().sort("runs.at", -1).limit(LAST_PROCESSED))
 
 
 def query_by_author(books, author):
-    """Return the books by one author, with the machine that processed each book last."""
-    rows = []
-    for doc in books.find({"author": author}):
-        doc["file_name"] = doc["_id"]
-        doc["last_processed_on"] = doc["runs"][-1]["host"]  # $push appends, so the last run is the latest
-        rows.append(doc)
-    return rows
+    """Return the documents of all books by one author."""
+    return list(books.find({"author": author}))
 
 
 def main():
-    """Print the report as Markdown tables, or only the books by one author."""
-    parser = argparse.ArgumentParser(description="Print a report of the books in gutenberg.books.")
+    """Print the report, or only the books by one author, as one JSON document."""
+    parser = argparse.ArgumentParser(description="Print a report of the books in gutenberg.books as JSON.")
     parser.add_argument("--author", help='only list the books by this author, for example "Mark Twain"')
     args = parser.parse_args()
 
@@ -69,16 +47,15 @@ def main():
     try:
         books = client[DATABASE][COLLECTION]
         if args.author:
-            print(f"### Books by {args.author}\n")
-            print_table(["file_name", "title", "word_count", "last_processed_on"],
-                        query_by_author(books, args.author))
-            return  # the finally block below still closes the client
-        print(f"### gutenberg.books: {books.count_documents({})} documents\n")
-        print("### Runs by machine\n")
-        print_table(["host", "books"], runs_by_machine(books))
-        print("\n### Last processed books\n")
-        print_table(["file_name", "title", "author", "word_count", "unique_words", "vocabulary_ratio", "runs"],
-                    last_processed(books))
+            result = query_by_author(books, args.author)
+        else:
+            result = {
+                "documents": books.count_documents({}),
+                "runs_by_machine": runs_by_machine(books),
+                "last_processed": last_processed(books),
+            }
+        # default=str turns the dates in runs into text: json cannot write datetime values itself
+        print(json.dumps(result, indent=2, default=str))
     except PyMongoError as e:
         logger.error("Cannot read from MongoDB: %s", e)
         raise

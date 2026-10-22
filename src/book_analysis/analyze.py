@@ -141,8 +141,13 @@ def process(text):
     return stats
 
 
-def save(books, key, stats):
-    """Create or update the book's document and record this run."""
+def save(books, bucket, key, stats):
+    """Create or update the book's document and record this run.
+
+    The document's _id is the book's key in S3; the bucket is stored with it, so the
+    document says where its book file is.
+    """
+    stats["bucket"] = bucket
     books.update_one(
         {"_id": key},
         {
@@ -158,7 +163,7 @@ def analyze_book(bucket, key):
     stats = process(download(bucket, key))
     client = connect()
     try:
-        save(client[DATABASE][COLLECTION], key, stats)
+        save(client[DATABASE][COLLECTION], bucket, key, stats)
     except PyMongoError as e:
         logger.error("Cannot save %s to MongoDB: %s", key, e)
         raise
@@ -184,7 +189,7 @@ def main():
     try:
         books = client[DATABASE][COLLECTION]
         for key in keys:
-            save(books, key, process(download(args.bucket, key)))
+            save(books, args.bucket, key, process(download(args.bucket, key)))
             logger.info("Saved %s", key)
     except PyMongoError as e:
         logger.error("Cannot save to MongoDB: %s", e)
