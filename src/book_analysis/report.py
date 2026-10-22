@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""Print the proof of completion for Lab 07: on which machines the books in gutenberg.books were analyzed.
+"""Print the proof of completion for Lab 07: on which machines the books in gutenberg.books were analyzed."""
 
-Run on your computer after each part: uv run python src/book_analysis/report.py
-"""
-
+import argparse
 import logging
 
 from pymongo.errors import PyMongoError
@@ -21,7 +19,12 @@ def print_table(columns, rows):
     print("| " + " | ".join(columns) + " |")
     print("|" + "---|" * len(columns))
     for row in rows:
-        print("| " + " | ".join(str(row.get(c, "")) for c in columns) + " |")
+        cells = []
+        for c in columns:
+            # row.get(c, "") leaves the cell empty when a document has no such field,
+            # for example no vocabulary_ratio for an empty file
+            cells.append(str(row.get(c, "")))
+        print("| " + " | ".join(cells) + " |")
 
 
 def runs_by_machine(books):
@@ -46,16 +49,35 @@ def last_processed(books):
     return rows
 
 
+def query_by_author(books, author):
+    """Return the books by one author, with the machine that processed each book last."""
+    rows = []
+    for doc in books.find({"author": author}):
+        doc["file_name"] = doc["_id"]
+        doc["last_processed_on"] = doc["runs"][-1]["host"]  # $push appends, so the last run is the latest
+        rows.append(doc)
+    return rows
+
+
 def main():
-    """Print the tables, ready to paste into RESULTS.md."""
+    """Print the report as Markdown tables, or only the books by one author."""
+    parser = argparse.ArgumentParser(description="Print a report of the books in gutenberg.books.")
+    parser.add_argument("--author", help='only list the books by this author, for example "Mark Twain"')
+    args = parser.parse_args()
+
     client = connect()
     try:
         books = client[DATABASE][COLLECTION]
+        if args.author:
+            print(f"### Books by {args.author}\n")
+            print_table(["file_name", "title", "word_count", "last_processed_on"],
+                        query_by_author(books, args.author))
+            return  # the finally block below still closes the client
         print(f"### gutenberg.books: {books.count_documents({})} documents\n")
         print("### Runs by machine\n")
         print_table(["host", "books"], runs_by_machine(books))
         print("\n### Last processed books\n")
-        print_table(["file_name", "title", "author", "word_count", "unique_lemmas", "vocabulary_ratio", "runs"],
+        print_table(["file_name", "title", "author", "word_count", "unique_words", "vocabulary_ratio", "runs"],
                     last_processed(books))
     except PyMongoError as e:
         logger.error("Cannot read from MongoDB: %s", e)

@@ -8,9 +8,9 @@ In [Lab 06](https://github.com/ksiller/lab-06-s3) you staged 100 Project Gutenbe
 
 1. **Part 1: Amazon EC2, as one batch job.** You launch a virtual machine that installs its own software, clones this repository at boot, and analyzes every book in your bucket. The results go into your MongoDB Atlas cluster from [Lab 05](https://github.com/ksiller/lab-05-nosql), one document per book.
 2. **Part 2: AWS Lambda, one event at a time.** You build a Chalice app around the same analysis code and deploy it as a Lambda function. Every book you upload afterwards is analyzed automatically, within seconds, with no machine running.
-3. **Part 3: A query of your own.** You add a table to the report, for example one that compares the vocabulary of the books or counts the books by author.
+3. **Part 3 (optional): A query of your own.** You add a table to the report, for example one that compares the vocabulary of the books or counts the books by author.
 
-You do not write analysis code in this lab. It is provided in `src/book_analysis/analyze.py`. Your work is to run it on EC2, build the Lambda app around it, add one query to the report, and document the results.
+You do not write analysis code in this lab. It is provided in `src/book_analysis/analyze.py`. Your work is to run it on EC2, build the Lambda app around it, and document the results. If you like, you also add a query of your own to the report.
 
 > [!IMPORTANT]
 > `mst3k` is a placeholder. Replace it everywhere with your UVA computing ID, for example `public-mst3k` → `public-abc2de`. If your Lab 06 bucket has a different name, use that name.
@@ -20,9 +20,9 @@ You do not write analysis code in this lab. It is provided in `src/book_analysis
 | Week | Do                                                                                                                | Milestone                                                                            |
 | ---- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | 1    | [Setup](#setup) and [Part 1: EC2](#part-1-analyze-all-books-on-ec2)                                               | your 100 books analyzed on EC2, terminate instance when completed                    |
-| 2    | [Part 2: Lambda](#part-2-build-a-lambda-app-for-new-books) and [Part 3: query](#part-3-add-a-query-to-the-report) | on-demand automatic processing with Chalice app (Lambda) when a new book is uploaded |
+| 2    | [Part 2: Lambda](#part-2-build-a-lambda-app-for-new-books) and [Part 3: query (optional)](#part-3-optional-add-a-query-to-the-report) | on-demand automatic processing with Chalice app (Lambda) when a new book is uploaded |
 
-You submit **once**, at the end of week 2, for all three parts (see [Submit your work](#submit-your-work)). Each part ends with a milestone checklist: finish it before you move on.
+You submit **once**, at the end of week 2, for the whole lab (see [Submit your work](#submit-your-work)). Each part ends with a milestone checklist: finish it before you move on.
 
 ## Learning goals
 
@@ -47,7 +47,7 @@ You submit **once**, at the end of week 2, for all three parts (see [Submit your
   - Deploy with `chalice deploy`, and know what it creates in AWS: the function, the permission for S3 to invoke it, and the bucket's event notification
   - Check and debug the deployed function with its logs (`chalice logs`)
 
-**Part 3: Querying the results**
+**Part 3 (optional): Querying the results**
 
 - Query MongoDB from Python with PyMongo: `find`, `sort`, `limit`, `distinct`, and `count_documents`
 
@@ -63,12 +63,12 @@ The lab builds on:
 ```text
 lab-07-ec2-lambda/
 ├── README.md
-├── pyproject.toml              # uv project: boto3, pymongo, nltk, chalice
+├── pyproject.toml              # uv project: boto3, pymongo, chalice
 ├── uv.lock
 ├── bootstrap.sh                # EC2 startup script: tools + this repo (Part 1)
 ├── src/book_analysis/
 │   ├── analyze.py              # the analysis: books in S3 → MongoDB
-│   └── report.py               # proof of completion; your query (Part 3)
+│   └── report.py               # proof of completion; your query (opt. Part 3)
 ├── chalice-config.json         # Lambda deployment settings (Part 2)
 ├── docs/                       # screenshots for this README
 └── CLAUDE.md                   # background for Claude Code, if you use it
@@ -88,11 +88,9 @@ You run the two scripts in `src/book_analysis/` with `uv run python`, from the t
   "title": "Alice's Adventures in Wonderland",
   "author": "Lewis Carroll",
   "language": "English",
-  "gutenberg_release": "June 27, 2008",
   "word_count": 27427,
   "unique_words": 2575,
-  "unique_lemmas": 2045,
-  "vocabulary_ratio": 0.0746,
+  "vocabulary_ratio": 0.0939,
   "runs": [
     {"host": "my-laptop",      "at": "2026-10-27T14:41:05Z"},
     {"host": "ip-172-31-5-20", "at": "2026-10-27T15:02:11Z"}
@@ -104,11 +102,9 @@ You run the two scripts in `src/book_analysis/` with `uv run python`, from the t
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `_id`                         | the object key of the corresponding book text file in your S3 bucket, for example `pg11.txt`                        |
 | `title`, `author`, `language` | from the `Title:`, `Author:`, and `Language:` lines at the top of the file                                          |
-| `gutenberg_release`           | when Project Gutenberg published the eBook (`Release date:`), **not** when the book was written                     |
 | `word_count`                  | how many words are in the book (a word is a run of letters and apostrophes, in lowercase)                           |
 | `unique_words`                | how many distinct words are in the book                                                                             |
-| `unique_lemmas`               | how many distinct dictionary forms (lemmas) are in the book: "run", "runs", "running", and "ran" all count as "run" |
-| `vocabulary_ratio`            | `unique_lemmas / word_count`: a rough measure of how varied the author's vocabulary is                              |
+| `vocabulary_ratio`            | `unique_words / word_count`: a rough measure of how varied the author's vocabulary is                              |
 | `runs`                        | **one entry per analysis**: the date of processing (`at`) and the machine it ran on (`host`)                        |
 
 `runs` is your proof of completion. After Part 1, your 100 books list the host name of *your* EC2 instance. After Part 2, the book you uploaded lists the host name of the Lambda environment that analyzed it.
@@ -264,17 +260,50 @@ In the next step you run `analyze.py` on your computer. Parts 1 and 2 run the sa
 | `connect()`            | connects to Atlas and returns a client; the caller closes it in `finally`, also after an error                                                                | `main()`, `analyze_book()`                   |
 | `get_book_keys()`      | returns the keys of all `.txt` files in the bucket                                                                                                            | `main()`                                     |
 | `download()`           | returns the text of one book in S3                                                                                                                            | `main()`, `analyze_book()`                   |
-| `read_header()`        | takes title, author, language, and release date from the header                                                                                               | `process()`                                  |
+| `read_header()`        | takes title, author, and language from the header                                                                                                              | `process()`                                  |
 | `extract_book_text()`  | returns the text of the book itself, without Project Gutenberg's header and license                                                                                       | `process()`                                  |
-| `lemmatize()`          | reduces each word to its dictionary form with NLTK                                                                                                            | `process()`                                  |
 | `process()`            | computes all fields of one book                                                                                                                               | `main()`, `analyze_book()`                   |
 | `save()`               | writes one book's document to Atlas and records the run                                                                                                       | `main()`, `analyze_book()`                   |
 | `main()`               | **entry point when you run** `analyze.py`: analyzes every book in the bucket, one after another (your computer, EC2)                                          | `uv run python src/book_analysis/analyze.py` |
 | `analyze_book()`       | **entry point for Lambda**: analyzes one book                                                                                                                 | your `app.py` (Part 2)                       |
 
-`read_header()` takes the metadata from the header that every Project Gutenberg file starts with. Then `extract_book_text()` cuts that header and the license at the end away, and returns only the text of the book, which is what gets counted. The files do not say when a book was first published or what genre it is.
+**Look at a book file first.** `analyze.py` reads the structure that every Project Gutenberg file has. Print the first 30 lines of one of your books; `aws s3 cp` with `-` as the target prints the file to the terminal instead of saving it:
 
-`lemmatize()` uses the [NLTK](https://www.nltk.org/) library: first `nltk.pos_tag` finds out whether a word is a noun, verb, adjective, or adverb, then the WordNet lemmatizer looks up its base form ("whispered" → "whisper", "mice" → "mouse"). The first run on a machine downloads the NLTK data it needs (about 12 MB) into the temporary folder. To learn more, read [Lemmatisation](https://en.wikipedia.org/wiki/Lemmatisation) on Wikipedia.
+```bash
+aws s3 cp s3://public-mst3k/pg11.txt - | head -n 30
+```
+
+```text
+The Project Gutenberg eBook of Alice's Adventures in Wonderland
+...
+Title: Alice's Adventures in Wonderland
+
+Author: Lewis Carroll
+
+Release date: June 27, 2008 [eBook #11]
+                Most recently updated: June 26, 2025
+
+Language: English
+...
+*** START OF THE PROJECT GUTENBERG EBOOK ALICE'S ADVENTURES IN WONDERLAND ***
+```
+
+Then find the two marker lines and their line numbers, and count the lines of the whole file:
+
+```bash
+aws s3 cp s3://public-mst3k/pg11.txt - | grep -n "PROJECT GUTENBERG EBOOK"
+aws s3 cp s3://public-mst3k/pg11.txt - | wc -l
+```
+
+```text
+27:*** START OF THE PROJECT GUTENBERG EBOOK ALICE'S ADVENTURES IN WONDERLAND ***
+3412:*** END OF THE PROJECT GUTENBERG EBOOK ALICE'S ADVENTURES IN WONDERLAND ***
+3762
+```
+
+The book itself is between line 27 and line 3412. The 26 lines before it are Project Gutenberg's header, and the 350 lines after it are its license.
+
+`read_header()` keeps the `Title:`, `Author:`, and `Language:` lines of this header and ignores the others, such as `Release date:`. Then `extract_book_text()` cuts that header and the license at the end away, and returns only the text of the book, which is what gets counted. The files do not say when a book was first published or what genre it is.
 
 `save()` writes each document with one `update_one(..., upsert=True)`: `$set` replaces the statistics, and `$push` appends the run to `runs`. A second run updates the numbers and keeps the history. Lab 08 adds more fields to the same documents.
 
@@ -398,7 +427,7 @@ uv run python src/book_analysis/analyze.py public-mst3k
 The log lists each book. The last line looks like this:
 
 ```text
-Processed 100 books from s3://public-mst3k in 372.4 s on ip-172-31-5-20
+Processed 100 books from s3://public-mst3k in 19.7 s on ip-172-31-5-20
 ```
 
 **Copy this line** for your submission. Then log out with `exit`.
@@ -413,7 +442,7 @@ Back in the **terminal on your computer**, in your clone:
 uv run python src/book_analysis/report.py
 ```
 
-The table **Runs by machine** now has a row `ip-172-31-...` with 100 books, next to the row of your computer from Setup. It is the host name of *your* instance, the same as in its prompt `ubuntu@ip-...`. The three books from your test have two entries in `runs`: the EC2 run updated their numbers and kept the history.
+The table **Runs by machine** now has a row `ip-172-31-...` with 100 books, next to the row of your computer from Setup. It is the host name of *your* instance, the same as in its prompt `ubuntu@ip-...`. The three books from your test have more than one entry in `runs`: the EC2 run updated their numbers and kept the history.
 
 Before you terminate the instance, take the screenshot for your submission: in the **AWS Console**, open **EC2** → **Instances** → your instance → **Security** tab, and save a screenshot of its security group's **inbound rules** as `results/security-group.png` (create the folder `results/` in your clone). See [Knowledge check](#knowledge-check), question 1.
 
@@ -446,7 +475,7 @@ Save your progress in your fork on GitHub, so nothing is lost between the weeks:
 
    `git status` must list only these two files as staged, and no `.pem` file, `.aws/` folder, or book file (`pg*.txt`).
 
-This is not a submission; you submit once, after Part 3.
+This is not a submission; you submit once, at the end of week 2.
 
 > **Before you continue in week 2:** start the Learner Lab and paste fresh credentials into `~/.aws/credentials` (they expired), and check that your Atlas cluster is not paused (Setup step 1). Your bucket, the books' documents, and the parameter `mongodb_credentials` are still there.
 
@@ -486,7 +515,7 @@ Chalice creates a folder `book-analyzer/` with four files:
 
 ### Step 2: Add the analysis code
 
-The default Chalice layout works well for small apps. In addition, Chalice supports an optional folder `chalicelib`. In the `chalicelib` folder we can organize our analysis code as a module that `app.py` imports. This keeps the code of your Lambda function structured, instead of stuffing everything into `app.py`. Our `analyze.py` script from Part 1 has about 240 lines; we can reuse it as is, add it to `chalicelib`, and then import its function from the `app.py` script that defines the S3 event handler. `chalice new-project` does not create `chalicelib/`, so you create it yourself.
+The default Chalice layout works well for small apps. In addition, Chalice supports an optional folder `chalicelib`. In the `chalicelib` folder we can organize our analysis code as a module that `app.py` imports. This keeps the code of your Lambda function structured, instead of stuffing everything into `app.py`. Our `analyze.py` script from Part 1 has about 200 lines; we can reuse it as is, add it to `chalicelib`, and then import its function from the `app.py` script that defines the S3 event handler. `chalice new-project` does not create `chalicelib/`, so you create it yourself.
 
 The folder name matters, because your Lambda function can only use code that `chalice deploy` uploads to AWS, and Chalice uploads only three things: `app.py`, the folder `chalicelib/`, and the packages listed in `requirements.txt`. What happens to each part of your app folder:
 
@@ -517,11 +546,10 @@ cp ../src/book_analysis/analyze.py chalicelib/
 
 ### Step 3: List the packages Lambda needs
 
-Lambda's Python already includes `boto3`, but not `pymongo` or `nltk`, which are needed by our `analyze.py` script. Chalice does not read `pyproject.toml`; it installs the packages listed in `requirements.txt`. Put these two lines into `requirements.txt`:
+Lambda's Python already includes `boto3`, but not `pymongo`, which our `analyze.py` script needs. Chalice does not read `pyproject.toml`; it installs the packages listed in `requirements.txt`. Put this line into `requirements.txt`:
 
 ```text
 pymongo
-nltk
 ```
 
 ### Step 4: Configure the deployment
@@ -536,8 +564,8 @@ The repository provides the settings in `chalice-config.json`:
     "dev": {
       "manage_iam_role": false,
       "iam_role_arn": "arn:aws:iam::ACCOUNT_ID:role/LabRole",
-      "lambda_timeout": 300,
-      "lambda_memory_size": 1024
+      "lambda_timeout": 60,
+      "lambda_memory_size": 512
     }
   }
 }
@@ -547,14 +575,14 @@ This is a template that defines:
 
 - the app name `book-analyzer` and the stage `dev`, which together name the stem of the corresponding Lambda function in AWS, i.e. `book-analyzer-dev-*`. With our function `analyze_new_book` in our `app.py` file (Step 5), our Lambda function will be named `book-analyzer-dev-analyze_new_book` in AWS.
 - `"manage_iam_role": false` and `"iam_role_arn": "arn:aws:iam::ACCOUNT_ID:role/LabRole"`: the IAM role the function runs with
-- `"lambda_memory_size": 1024`: the memory in MB
-- `"lambda_timeout": 300`: the timeout in seconds
+- `"lambda_memory_size": 512`: the memory in MB
+- `"lambda_timeout": 60`: the timeout in seconds
 
 | Setting                                         | Why                                                                                                                            |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `"manage_iam_role": false` and `"iam_role_arn"` | the Learner Lab does not let Chalice create an IAM role, so the function uses `LabRole`, which may read S3 and Parameter Store |
-| `"lambda_memory_size": 1024`                    | Lambda also gives more CPU to functions with more memory. The default, 128 MB, is too little for `nltk` and a long book        |
-| `"lambda_timeout": 300`                         | seconds a single run may take before Lambda stops it. The default, 60 seconds, is too short for the longest books              |
+| `"lambda_memory_size": 512`                    | Lambda also gives more CPU to functions with more memory. The default, 128 MB, is too little for the longest books: they need about 120 MB |
+| `"lambda_timeout": 60`                         | seconds a single run may take before Lambda stops it. One book takes only a few seconds, so 60 seconds leaves room for a slow download or connection |
 
 We need to update `iam_role_arn`. An ARN (Amazon Resource Name) identifies one resource in AWS, here the role `LabRole` in your account, so it must contain your AWS account ID instead of the placeholder `ACCOUNT_ID`.
 
@@ -635,7 +663,7 @@ uv run chalice deploy
 Chalice packages `app.py`, `chalicelib/`, and the packages in `requirements.txt`, creates the function `book-analyzer-dev-analyze_new_book`, allows S3 to invoke it, and adds the event notification to your bucket. In the **AWS Console**, check:
 
 - **The S3 trigger:** **S3** → `public-mst3k` → **Properties** → **Event notifications** lists a notification for `.txt` files that sends events to `book-analyzer-dev-analyze_new_book`.
-- **The Lambda function:** **Lambda** → **Functions** → `book-analyzer-dev-analyze_new_book`. The **Function overview** shows **S3** as its trigger, and **Configuration** → **General configuration** shows 1024 MB of memory and a timeout of 5 min.
+- **The Lambda function:** **Lambda** → **Functions** → `book-analyzer-dev-analyze_new_book`. The **Function overview** shows **S3** as its trigger, and **Configuration** → **General configuration** shows 512 MB of memory and a timeout of 1 min.
 
 If you change `app.py`, `analyze.py`, `requirements.txt`, or `.chalice/config.json` later, run `uv run chalice deploy` again: it updates the function in place. You do not need to delete anything first.
 
@@ -667,7 +695,34 @@ cd ..
 uv run python src/book_analysis/report.py
 ```
 
-**Runs by machine** now also has a row with 1 book: the host name of the Lambda environment, an internal address such as `169.254.26.229`. **Last processed books** lists `pg74.txt` first, with its title, author, and statistics. The document count is now 101.
+Look at **Runs by machine**: it now has three rows, one for each computer that ran the same `analyze.py`:
+
+| Host | Books | Which machine |
+| --- | --- | --- |
+| your computer's name | 3 | your laptop, in Setup step 7 |
+| `ip-172-31-...` | 100 | your EC2 instance, in Part 1 |
+| an internal address such as `169.254.18.253` | 1 | the Lambda environment that analyzed `pg74.txt` |
+
+The books add up to 104, but the document count is 101: the three books from your test were analyzed twice, on your computer and on EC2, and each document's `runs` list keeps both. If you upload more books, Lambda may use another environment, which shows up as another row.
+
+Now query the database for the book you uploaded, to confirm that the trigger worked. `report.py --author` lists only the books by one author, and the machine that processed each of them last:
+
+```bash
+uv run python src/book_analysis/report.py --author "Mark Twain"
+```
+
+```text
+### Books by Mark Twain
+
+| file_name | title | word_count | last_processed_on |
+|---|---|---|---|
+| pg1837.txt | The Prince and the Pauper | 71688 | ip-172-31-... |
+| pg74.txt | The Adventures of Tom Sawyer, Complete | 74383 | 169.254.... |
+```
+
+`pg74.txt` was processed by Lambda, *The Prince and the Pauper* from your 100 books by your EC2 instance. If you uploaded a different book, use its author, exactly as on the `Author:` line at the top of the file.
+
+**Last processed books** lists `pg74.txt` first, with its title, author, and statistics.
 
 **Success:** The new book was analyzed by Lambda, triggered by your upload, with the same code that ran on EC2.
 
@@ -677,12 +732,16 @@ Leave the app deployed. It costs nothing while no books arrive. To remove it lat
 
 - [ ] `uv run chalice logs -n analyze_new_book` (in `book-analyzer/`) shows `pg74.txt: ... words`.
 - [ ] `report.py` shows 101 documents and a row with 1 book for the Lambda environment.
+- [ ] `report.py --author` lists the book you uploaded, processed on the Lambda environment's host.
 - [ ] You saved a screenshot of your Lambda function's S3 trigger as `results/lambda-trigger.png` ([Knowledge check](#knowledge-check), question 2).
 - [ ] You saved a screenshot of your Lambda function's CloudWatch log as `results/lambda-cloudwatch-log.png` ([Knowledge check](#knowledge-check), question 3).
+- [ ] `git status` lists `book-analyzer/` as new.
 
-## Part 3: Add a query to the report
+**Congratulations, you did it! As a last step, complete the [Knowledge check](#knowledge-check) below and [submit](#submit-your-work).** If you want to go further first, Part 3 is optional.
 
-`report.py` prints two tables from `gutenberg.books`. Add a third with a query of your own: write one function in `src/book_analysis/report.py` that prints a Markdown table, and call it at the end of `main()`, inside the `try` block (the client is closed after it, in `finally`), so `report.py` prints it too. Pick one of these suggestions, or a query of your own of the same size.
+## Part 3 (optional): Add a query to the report
+
+This part is optional. `report.py` prints two tables from `gutenberg.books`. Add a third with a query of your own: write one function in `src/book_analysis/report.py` that prints a Markdown table, and call it at the end of `main()`, inside the `try` block (the client is closed after it, in `finally`), so `report.py` prints it too. Pick one of these suggestions, or a query of your own of the same size.
 
 **Suggestion 1:** `vocabulary_extremes(books)`**.** Which books have the most varied and the least varied vocabulary? Print two tables:
 
@@ -705,14 +764,14 @@ with the columns `file_name`, `title`, `word_count`, and `vocabulary_ratio`. Hin
 - `runs_by_machine()` in `report.py` does the same for host names: `books.distinct(...)` returns every value of a field once, and `books.count_documents(...)` counts the documents that have one of them.
 - `rows.sort(key=lambda row: row["books"], reverse=True)` sorts a list of dictionaries by their `books` value, the largest first.
 
-For both: `print_table(columns, rows)` in `report.py` already prints a list of dictionaries as a Markdown table. Run `uv run python src/book_analysis/report.py` and check that your table appears. In the submission, you explain how your function works (item 4).
+For both: `print_table(columns, rows)` in `report.py` already prints a list of dictionaries as a Markdown table. Run `uv run python src/book_analysis/report.py` and check that your table appears. If you do this part, you explain how your function works in the submission (item 4).
 
-### Milestone 3: end of week 2
+### Milestone 3 (optional)
 
 - [ ] `report.py` prints the table of your query from Part 3.
-- [ ] `git status` lists `book-analyzer/` and `src/book_analysis/report.py` as changed or new.
+- [ ] `git status` lists `src/book_analysis/report.py` as changed.
 
-**Congratulations, you did it! As a last step, complete the [Knowledge check](#knowledge-check) below and [submit](#submit-your-work).**
+Then complete the [Knowledge check](#knowledge-check) below and [submit](#submit-your-work).
 
 ## Knowledge check
 
@@ -724,17 +783,17 @@ By the end of this lab, you should be able to answer the following questions. Ea
 
 ## Submit your work
 
-Submit when all three parts are done. Complete the file `RESULTS.md` you started in week 1, in the top folder of your clone (create it if you have not yet), with the items below. Do not change `README.md`.
+Submit when Parts 1 and 2 are done, and Part 3 if you chose to do it. Complete the file `RESULTS.md` you started in week 1, in the top folder of your clone (create it if you have not yet), with the items below. Do not change `README.md`.
 
 1. The last line of `analyze.py` on EC2 (Part 1, Step 4).
-2. The complete output of `report.py` after Part 3. It is already formatted as Markdown tables.
+2. The complete output of `report.py` after Part 2, or after Part 3 if you did it. It is already formatted as Markdown tables.
 3. Would you use EC2 or Lambda to analyze 100 books at once? Which would you use to analyze one new book a day? Explain your choices in two or three sentences, using the run time from item 1 and the `Duration` in the `REPORT` line of `chalice logs`.
-4. In two or three sentences, explain how your custom query function from Part 3 works: which PyMongo methods does it call (`find`, `sort`, `limit`, `distinct`, `count_documents`), what does each one return, and how does your function turn the result into the rows that `print_table()` prints?
+4. Only if you did the optional Part 3: in two or three sentences, explain how your custom query function works: which PyMongo methods does it call (`find`, `sort`, `limit`, `distinct`, `count_documents`), what does each one return, and how does your function turn the result into the rows that `print_table()` prints?
 5. A screenshot of the inbound rules of your EC2 instance's security group, showing SSH on port 22 ([Knowledge check](#knowledge-check), question 1). Save it as `results/security-group.png` and show it in `RESULTS.md` with `![Security group](results/security-group.png)`.
 6. A screenshot of your Lambda function's S3 trigger, showing your bucket, the event type, and the `.txt` suffix ([Knowledge check](#knowledge-check), question 2). Save it as `results/lambda-trigger.png` and show it in `RESULTS.md` with `![Lambda trigger](results/lambda-trigger.png)`.
 7. A screenshot of your Lambda function's CloudWatch log, showing the line `pg74.txt: ... words` ([Knowledge check](#knowledge-check), question 3). Save it as `results/lambda-cloudwatch-log.png` and show it in `RESULTS.md` with `![Lambda CloudWatch log](results/lambda-cloudwatch-log.png)`.
 
-Commit your results, your Chalice app, and your report, and push:
+Commit your results, your Chalice app, and your report (it is unchanged if you skipped Part 3), and push:
 
 ```bash
 git add RESULTS.md results/ book-analyzer/ src/book_analysis/report.py
@@ -744,7 +803,7 @@ git push origin main
 
 `config.json` now contains your account ID. That is not a secret. Check with `git status` that no `.pem` file, no `.aws/` folder, and no `.bak` file is staged.
 
-Submit the URL of your fork in the Canvas assignment, once, for Parts 1-3: `https://github.com/YOUR_USERNAME/lab-07-ec2-lambda`
+Submit the URL of your fork in the Canvas assignment, once, for the whole lab: `https://github.com/YOUR_USERNAME/lab-07-ec2-lambda`
 
 > **Keep your Lab 06 bucket, the** `gutenberg` **database, and the** `0.0.0.0/0` **access list entry.** Do not click **Reset** in the Learner Lab. Lab 08 reads the same books and adds to the same documents.
 
@@ -761,7 +820,7 @@ The goal is that you can build and debug a Lambda function, not that Claude Code
 - "I wrote `analyze_new_book` in `book-analyzer/app.py`. Check it against `analyze_book()` in `chalicelib/analyze.py` and tell me what is wrong, without fixing it."
 - "What does `@app.on_s3_event` create in AWS when I run `chalice deploy`?"
 
-**Prompts for the query (Part 3):**
+**Prompts for the query (optional Part 3):**
 
 - "Explain how `print_table()` and `main()` in `report.py` turn MongoDB documents into a Markdown table."
 - "How do I sort a PyMongo `find()` by a field and keep only the first 5 results?"
@@ -804,22 +863,18 @@ The goal is that you can build and debug a Lambda function, not that Claude Code
 - `chalice deploy`**:** `iam:CreateRole` **or** `ACCOUNT_ID` **in an error message.** `.chalice/config.json` is still the one from `chalice new-project`, or it still contains the placeholder. Repeat Part 2, Step 4.
 - `No module named 'analyze'` **in** `chalice logs`**.** `analyze.py` is next to `app.py` instead of in `chalicelib/`, so Chalice did not upload it. Move it into `chalicelib/` (Part 2, Step 2), import it with `from chalicelib.analyze import analyze_book`, and deploy again.
 - `Runtime.ImportModuleError: Unable to import module 'app': No module named 'chalicelib'` **in** `chalice logs`**.** The folder is not called exactly `chalicelib`, it is not inside `book-analyzer/`, or `chalicelib/__init__.py` is missing. See Part 2, Step 2, and deploy again.
-- `No module named 'pymongo'` **or** `No module named 'nltk'` **in** `chalice logs`**.** The package is missing from `requirements.txt`. See Part 2, Step 3, and deploy again.
+- `No module named 'pymongo'` **in** `chalice logs`**.** The package is missing from `requirements.txt`. See Part 2, Step 3, and deploy again.
 - `chalice deploy`**:** `ResourceConflictException` **or** `Function already exist`**.** The function exists in AWS, but your `book-analyzer/.chalice/deployed/` folder does not know about it, for example after you recreated the app folder. In the **AWS Console**, open **Lambda** → **Functions** → `book-analyzer-dev-analyze_new_book` → **Actions** → **Delete**, then **S3** → your bucket → **Properties** → **Event notifications** and delete its notification, and deploy again.
 - `chalice deploy`**:** `Configuration is ambiguously defined. Cannot have overlapping suffixes in two rules`**.** Your bucket already has an event notification for `.txt` files, for example from the class demo. In the **AWS Console**, open **S3** → your bucket → **Properties** → **Event notifications**, delete the other notification, and deploy again.
 - **The upload does not trigger the function.** See the 10-minute note in Part 2, Step 7. Also check that the key ends in `.txt` and that **S3 → Properties → Event notifications** lists the rule.
-- `Task timed out after 300.00 seconds` **in** `chalice logs`**.** The function could not reach Atlas in time. Check that your cluster is not paused and that `0.0.0.0/0` is in the IP Access List (see **MongoDB Atlas** above).
-- `Task timed out after 60.00 seconds` **in** `chalice logs`**.** `.chalice/config.json` does not have `"lambda_timeout": 300`. Copy `chalice-config.json` again (Part 2, Step 4) and run `uv run chalice deploy` again.
-
-**NLTK**
-
-- `LookupError: Resource wordnet not found` **(or** `averaged_perceptron_tagger_eng`**).** The NLTK data could not be downloaded, usually because the machine had no internet connection at that moment. Run the analysis again, or upload the book again for Lambda.
+- `Task timed out after 60.00 seconds` **in** `chalice logs`**.** The function could not reach Atlas in time. Check that your cluster is not paused and that `0.0.0.0/0` is in the IP Access List (see **MongoDB Atlas** above).
 
 ## Limitations of this approach
 
+- `get_book_keys()` lists at most 1000 files with one call to S3. A bucket with more books would be only partly analyzed, without an error; listing more needs a paginator (`get_paginator("list_objects_v2")`).
 - EC2 processes the books one after another. A much larger corpus would leave the other CPU cores idle. Lab 08 runs the work in parallel on UVA HPC.
 - Lambda analyzes new uploads only. A book you delete from the bucket keeps its document in MongoDB, and `index.html` from Lab 06 does not list new books.
 - Atlas accepts connections from any address (`0.0.0.0/0`), so the database password is the only protection. Production systems give their servers fixed addresses or private network connections instead.
 - Each Lambda run opens a new connection to Atlas and closes it at the end. Hundreds of uploads at once would mean hundreds of connections to a free cluster at the same time.
-- The analysis only counts words and lemmas. What a book is about needs language models. **Coming up in Lab 08:** on UVA HPC, a Slurm job array runs transformer models on GPU nodes and adds to the same documents: a summary of each book, its genre (compared with the subjects in the Project Gutenberg catalog), its approximate era (from the author's life years in the catalog), and its chapters.
+- The analysis only counts words. What a book is about needs language models. **Coming up in Lab 08:** on UVA HPC, a Slurm job array runs transformer models on GPU nodes and adds to the same documents: a summary of each book, its genre (compared with the subjects in the Project Gutenberg catalog), its approximate era (from the author's life years in the catalog), and its chapters.
 - `host` is only a name. Two machines can have the same name, and the name of a Lambda environment does not say which function it belongs to.
