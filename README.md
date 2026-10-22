@@ -114,6 +114,8 @@ The two scripts in `src/book_analysis/`:
 
 ## Setup
 
+![Setup: what already exists, and what you configure](docs/setup.png)
+
 ### 1. Prepare your MongoDB Atlas cluster
 
 You use your Atlas cluster from [Lab 05](https://github.com/ksiller/lab-05-nosql). First check that your `MONGODB_ATLAS_*` environment variables from Lab 05 are still set. The output includes your password, so do not run this while sharing your screen:
@@ -353,6 +355,8 @@ env -u MONGODB_ATLAS_URL uv run python src/book_analysis/analyze.py public-mst3k
 
 **The Case:** 100 books are a batch job: start a machine, process everything, shut it down. The machine must install its own software and get the code, because nobody should have to set it up by hand.
 
+![Part 1: an EC2 instance analyzes all books in one batch](docs/part1.png)
+
 ### Step 1: Read the bootstrap script
 
 Open [bootstrap.sh](bootstrap.sh). Passed to the instance as **user data**, it runs once, as root, when the instance boots for the first time. It automatically installs `git`, `curl`, Python 3 and `uv`, and clones this repository into `/home/ubuntu/lab-07-ec2-lambda` on the new EC2 instance when it is provisioned. Answer for yourself:
@@ -491,6 +495,8 @@ This is not a submission; you submit once, at the end of week 2.
 ## Part 2: Build a Lambda app for new books
 
 **The Case:** When book 101 arrives, starting a machine for one book is wasteful. A Lambda function triggered by the upload analyzes it in a few seconds, and costs nothing while no books arrive.
+
+![Part 2: a Lambda function analyzes each new upload](docs/part2.png)
 
 In this part you build a Chalice app around a Lambda function. The function runs the same `analyze.py` you ran on EC2. Work in the **terminal on your computer**, in your clone.
 
