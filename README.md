@@ -72,7 +72,7 @@ lab-07-ec2-lambda/
 ├── chalice-config.json         # Lambda deployment settings (Part 2)
 ├── KNOWLEDGE_CHECK.md          # questions you answer for your submission
 ├── docs/                       # screenshots for this README
-└── CLAUDE.md                   # background for Claude Code, if you use it
+└── CLAUDE.md                   # instructions for Claude Code, if you use it
 ```
 
 You add these yourself: the Chalice app `book-analyzer/` (Part 2), the folder `results/` with your report and screenshots for your submission, and, if you do the optional Part 3, `src/book_analysis/query.py`. You write your answers into `KNOWLEDGE_CHECK.md`. `README.md` stays as it is.
@@ -954,7 +954,9 @@ The output ends with `ds2022-fall-2026/lab-07-ec2-lambda`. Then start Claude Cod
 claude
 ```
 
-Claude Code reads [CLAUDE.md](CLAUDE.md) in this repository, which tells it about the Learner Lab and your Atlas cluster, so you do not have to explain them yourself.
+Claude Code reads [CLAUDE.md](CLAUDE.md) in this repository: instructions for Claude, which tell it about the Learner Lab and your Atlas cluster, so you do not have to explain them yourself.
+
+**In this repository, Claude Code works as your teaching assistant (TA).** `CLAUDE.md` tells it to explain, to help you find the cause of an error, and to give you hints, but not to write the graded parts for you: the body of `analyze_new_book()` in `app.py`, your query function in `query.py`, and your answers in `KNOWLEDGE_CHECK.md`, including the console paths. If you ask it for one of these, it says so and gives you the next hint instead. That is intended, not a malfunction.
 
 The goal is that you can build and debug a Lambda function, not that Claude Code can. Ask it to explain before it changes anything, and read every `aws` and `chalice` command before you let it run one.
 
@@ -968,7 +970,6 @@ The goal is that you can build and debug a Lambda function, not that Claude Code
 **Prompts for the query (optional Part 3):**
 
 - "Explain the skeleton of `query.py` from the README: what do the imports, the `try`/`finally` block, and `json.dumps` do?"
-
 - "Explain how `main()` in `report.py` turns the documents from MongoDB into JSON, and why `json.dumps` needs `default=str`."
 - "How do I sort a PyMongo `find()` by a field and keep only the first 5 results?"
 - "Explain what `distinct()` and `count_documents()` return in `runs_by_machine()`."
