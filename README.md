@@ -8,9 +8,9 @@ In [Lab 06](https://github.com/ksiller/lab-06-s3) you staged 100 Project Gutenbe
 
 1. **Part 1: Amazon EC2, as one batch job.** You launch a virtual machine that installs its own software, clones this repository at boot, and analyzes every book in your bucket. The results go into your MongoDB Atlas cluster from [Lab 05](https://github.com/ksiller/lab-05-nosql), one document per book.
 2. **Part 2: AWS Lambda, one event at a time.** You build a Chalice app around the same analysis code and deploy it as a Lambda function. Every book you upload afterwards is analyzed automatically, within seconds, with no machine running.
-3. **Part 3 (optional): A query of your own.** You add a table to the report, for example one that compares the vocabulary of the books or counts the books by author.
+3. **Part 3 (optional): A query of your own.** You write a short script, `query.py`, with a query of your own, for example one that compares the vocabulary of the books or counts the books by author.
 
-You do not write analysis code in this lab. It is provided in `src/book_analysis/analyze.py`. Your work is to run it on EC2, build the Lambda app around it, and document the results. If you like, you also add a query of your own to the report.
+You do not write analysis code in this lab. It is provided in `src/book_analysis/analyze.py`. Your work is to run it on EC2, build the Lambda app around it, and document the results. If you like, you also write a query of your own.
 
 > [!IMPORTANT]
 > `mst3k` is a placeholder. Replace it everywhere with your UVA computing ID, for example `public-mst3k` → `public-abc2de`. If your Lab 06 bucket has a different name, use that name.
@@ -20,7 +20,7 @@ You do not write analysis code in this lab. It is provided in `src/book_analysis
 | Week | Do                                                                                                                | Milestone                                                                            |
 | ---- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | 1    | [Setup](#setup) and [Part 1: EC2](#part-1-analyze-all-books-on-ec2)                                               | your 100 books analyzed on EC2, terminate instance when completed                    |
-| 2    | [Part 2: Lambda](#part-2-build-a-lambda-app-for-new-books) and [Part 3: query (optional)](#part-3-optional-add-a-query-to-the-report) | on-demand automatic processing with Chalice app (Lambda) when a new book is uploaded |
+| 2    | [Part 2: Lambda](#part-2-build-a-lambda-app-for-new-books) and [Part 3: query (optional)](#part-3-optional-write-a-query-of-your-own) | on-demand automatic processing with Chalice app (Lambda) when a new book is uploaded |
 
 You submit **once**, at the end of week 2, for the whole lab (see [Submit your work](#submit-your-work)). Each part ends with a milestone checklist: finish it before you move on.
 
@@ -68,13 +68,13 @@ lab-07-ec2-lambda/
 ├── bootstrap.sh                # EC2 startup script: tools + this repo (Part 1)
 ├── src/book_analysis/
 │   ├── analyze.py              # the analysis: books in S3 → MongoDB
-│   └── report.py               # proof of completion; your query (opt. Part 3)
+│   └── report.py               # proof of completion
 ├── chalice-config.json         # Lambda deployment settings (Part 2)
 ├── docs/                       # screenshots for this README
 └── CLAUDE.md                   # background for Claude Code, if you use it
 ```
 
-You add three things yourself: the Chalice app `book-analyzer/` (Part 2), and `RESULTS.md` with the folder `results/` for your submission. `README.md` stays as it is.
+You add these yourself: the Chalice app `book-analyzer/` (Part 2), `RESULTS.md` with the folder `results/` for your submission, and, if you do the optional Part 3, `src/book_analysis/query.py`. `README.md` stays as it is.
 
 The two scripts in `src/book_analysis/`:
 
@@ -742,9 +742,33 @@ Leave the app deployed. It costs nothing while no books arrive. To remove it lat
 
 **Congratulations, you did it! As a last step, complete the [Knowledge check](#knowledge-check) below and [submit](#submit-your-work).** If you want to go further first, Part 3 is optional.
 
-## Part 3 (optional): Add a query to the report
+## Part 3 (optional): Write a query of your own
 
-This part is optional. `report.py` prints two tables from `gutenberg.books`. Add a third with a query of your own: write one function in `src/book_analysis/report.py` that prints a Markdown table, and call it at the end of `main()`, inside the `try` block (the client is closed after it, in `finally`), so `report.py` prints it too. Pick one of these suggestions, or a query of your own of the same size.
+**This part is optional.** If you want to practice your NoSQL MongoDB skills, write a new script `src/book_analysis/query.py` with your own query on `gutenberg.books`; `report.py` stays as it is. Start from this skeleton; it connects to Atlas, reuses `print_table()` from `report.py`, and closes the client at the end:
+
+```python
+#!/usr/bin/env python3
+"""My own query on gutenberg.books."""
+
+from book_analysis.analyze import COLLECTION, DATABASE, connect
+from book_analysis.report import print_table
+
+
+def main():
+    """Print the result of my query as a Markdown table."""
+    client = connect()
+    try:
+        books = client[DATABASE][COLLECTION]
+        # TODO: call your query function and print its rows with print_table()
+    finally:
+        client.close()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+Write one query function in `query.py`, above `main()`, and call it where the `TODO` is. Pick one of these suggestions, or a query of your own of the same size.
 
 **Suggestion 1:** `vocabulary_extremes(books)`**.** Which books have the most varied and the least varied vocabulary? Print two tables:
 
@@ -760,19 +784,25 @@ with the columns `file_name`, `title`, `word_count`, and `vocabulary_ratio`. Hin
   | --------------------------------------------------------- | ---------------------------------------------------- |
   | `db.books.find().sort({ vocabulary_ratio: -1 }).limit(5)` | `books.find().sort("vocabulary_ratio", -1).limit(5)` |
 
-- Look at how `last_processed()` adds `file_name` to each document.
+- Look at how `last_processed()` in `report.py` adds `file_name` to each document.
 
 **Suggestion 2:** `books_by_author(books)`**.** Which authors have the most books in your collection? Print one table with the columns `author` and `books`, the authors with the most books first. Hints:
 
 - `runs_by_machine()` in `report.py` does the same for host names: `books.distinct(...)` returns every value of a field once, and `books.count_documents(...)` counts the documents that have one of them.
 - `rows.sort(key=lambda row: row["books"], reverse=True)` sorts a list of dictionaries by their `books` value, the largest first.
 
-For both: `print_table(columns, rows)` in `report.py` already prints a list of dictionaries as a Markdown table. Run `uv run python src/book_analysis/report.py` and check that your table appears. If you do this part, you explain how your function works in the submission (item 4).
+For both: `print_table(columns, rows)`, imported from `report.py`, prints a list of dictionaries as a Markdown table. Run your script from the top folder of your clone:
+
+```bash
+uv run python src/book_analysis/query.py
+```
+
+In the submission, you add its output and explain how your function works (item 4).
 
 ### Milestone 3 (optional)
 
-- [ ] `report.py` prints the table of your query from Part 3.
-- [ ] `git status` lists `src/book_analysis/report.py` as changed.
+- [ ] `query.py` prints the table of your query.
+- [ ] `git status` lists `src/book_analysis/query.py` as new.
 
 Then complete the [Knowledge check](#knowledge-check) below and [submit](#submit-your-work).
 
@@ -789,22 +819,23 @@ By the end of this lab, you should be able to answer the following questions. Ea
 Submit when Parts 1 and 2 are done, and Part 3 if you chose to do it. Complete the file `RESULTS.md` you started in week 1, in the top folder of your clone (create it if you have not yet), with the items below. Do not change `README.md`.
 
 1. The last line of `analyze.py` on EC2 (Part 1, Step 4).
-2. The complete output of `report.py` after Part 2, or after Part 3 if you did it. It is already formatted as Markdown tables.
+2. The complete output of `report.py` after Part 2. It is already formatted as Markdown tables.
 3. Would you use EC2 or Lambda to analyze 100 books at once? Which would you use to analyze one new book a day? Explain your choices in two or three sentences, using the run time from item 1 and the `Duration` in the `REPORT` line of `chalice logs`.
-4. Only if you did the optional Part 3: in two or three sentences, explain how your custom query function works: which PyMongo methods does it call (`find`, `sort`, `limit`, `distinct`, `count_documents`), what does each one return, and how does your function turn the result into the rows that `print_table()` prints?
+4. Only if you did the optional Part 3: the output of `query.py`, and two or three sentences that explain how your query function works: which PyMongo methods does it call (`find`, `sort`, `limit`, `distinct`, `count_documents`), what does each one return, and how does your function turn the result into the rows that `print_table()` prints?
 5. A screenshot of the inbound rules of your EC2 instance's security group, showing SSH on port 22 ([Knowledge check](#knowledge-check), question 1). Save it as `results/security-group.png` and show it in `RESULTS.md` with `![Security group](results/security-group.png)`.
 6. A screenshot of your Lambda function's S3 trigger, showing your bucket, the event type, and the `.txt` suffix ([Knowledge check](#knowledge-check), question 2). Save it as `results/lambda-trigger.png` and show it in `RESULTS.md` with `![Lambda trigger](results/lambda-trigger.png)`.
 7. A screenshot of your Lambda function's CloudWatch log, showing the line `pg74.txt: ... words` ([Knowledge check](#knowledge-check), question 3). Save it as `results/lambda-cloudwatch-log.png` and show it in `RESULTS.md` with `![Lambda CloudWatch log](results/lambda-cloudwatch-log.png)`.
 
-Commit your results, your Chalice app, and your report (it is unchanged if you skipped Part 3), and push:
+Commit your results, your Chalice app, and, if you did Part 3, your `query.py`, and push. `src/` stages `query.py` if it exists; otherwise nothing in it has changed:
 
 ```bash
-git add RESULTS.md results/ book-analyzer/ src/book_analysis/report.py
+git add RESULTS.md results/ book-analyzer/ src/
+git status
 git commit -m "Complete Lab 07: EC2 and Lambda"
 git push origin main
 ```
 
-`config.json` now contains your account ID. That is not a secret. Check with `git status` that no `.pem` file, no `.aws/` folder, and no `.bak` file is staged.
+`config.json` now contains your account ID. That is not a secret. Check in the output of `git status` that no `.pem` file, no `.aws/` folder, and no `.bak` file is staged.
 
 Submit the URL of your fork in the Canvas assignment, once, for the whole lab: `https://github.com/YOUR_USERNAME/lab-07-ec2-lambda`
 
@@ -824,6 +855,8 @@ The goal is that you can build and debug a Lambda function, not that Claude Code
 - "What does `@app.on_s3_event` create in AWS when I run `chalice deploy`?"
 
 **Prompts for the query (optional Part 3):**
+
+- "Explain the skeleton of `query.py` from the README: what do the two imports and the `try`/`finally` block do?"
 
 - "Explain how `print_table()` and `main()` in `report.py` turn MongoDB documents into a Markdown table."
 - "How do I sort a PyMongo `find()` by a field and keep only the first 5 results?"

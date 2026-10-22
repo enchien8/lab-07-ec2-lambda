@@ -33,9 +33,9 @@ full instructions.
 
 - `src/book_analysis/analyze.py` is provided and should not be changed. The Lambda app uses an
   identical copy in `book-analyzer/chalicelib/analyze.py`.
-- The student builds `book-analyzer/` (Part 2). In the optional Part 3, they add one query
-  function to `src/book_analysis/report.py`: `vocabulary_extremes()`, `books_by_author()`, or a
-  query of their own.
+- The student builds `book-analyzer/` (Part 2). In the optional Part 3, they write
+  `src/book_analysis/query.py` from the skeleton in README.md, with one query function:
+  `vocabulary_extremes()`, `books_by_author()`, or a query of their own. `report.py` stays as it is.
 - The Lambda function is `book-analyzer-dev-analyze_new_book`; its log:
   `uv run chalice logs -n analyze_new_book` in `book-analyzer/`.
 
