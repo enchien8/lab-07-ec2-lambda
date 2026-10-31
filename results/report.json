@@ -1,6 +1,10 @@
 {
-  "documents": 100,
+  "documents": 101,
   "runs_by_machine": [
+    {
+      "host": "169.254.68.153",
+      "books": 1
+    },
     {
       "host": "Ethans-MacBook-Pro.local",
       "books": 3
@@ -11,6 +15,22 @@
     }
   ],
   "last_processed": [
+    {
+      "_id": "pg74.txt",
+      "author": "Mark Twain",
+      "bucket": "public-ethanchien",
+      "language": "English",
+      "runs": [
+        {
+          "host": "169.254.68.153",
+          "at": "2026-10-31 16:50:19.418000"
+        }
+      ],
+      "title": "The Adventures of Tom Sawyer, Complete",
+      "unique_words": 7295,
+      "vocabulary_ratio": 0.0981,
+      "word_count": 74383
+    },
     {
       "_id": "pg996.txt",
       "author": "Miguel de Cervantes Saavedra",
@@ -42,22 +62,6 @@
       "unique_words": 9698,
       "vocabulary_ratio": 0.07,
       "word_count": 138490
-    },
-    {
-      "_id": "pg963.txt",
-      "author": "Charles Dickens",
-      "bucket": "public-ethanchien",
-      "language": "English",
-      "runs": [
-        {
-          "host": "ip-172-31-24-165",
-          "at": "2026-10-31 16:48:51.983000"
-        }
-      ],
-      "title": "Little Dorrit",
-      "unique_words": 14784,
-      "vocabulary_ratio": 0.0428,
-      "word_count": 345231
     }
   ]
 }
