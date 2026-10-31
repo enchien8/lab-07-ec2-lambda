@@ -14,7 +14,7 @@ Suppose your instance is running and has a public IP address, but `ssh` cannot c
 
 **Your answer:** Which path did you take in the console (service → page → tab)?
 
-...
+EC2 → Security Groups → `launch-wizard-1` → Inbound rules. The inbound rules show which connections the instance accepts.
 
 ## 2. Lambda: why didn't my function run?
 
@@ -26,7 +26,7 @@ Suppose you uploaded a new book to your bucket, but several minutes later MongoD
 
 **Your answer:** Which path did you take in the console (service → page → tab)?
 
-...
+Lambda → Functions → `book-analyzer-dev-analyze_new_book` → Function overview, where S3 is listed as the trigger. The same notification is visible under S3 → `public-ethanchien` → Properties → Event notifications.
 
 ## 3. Lambda: where do I find the error?
 
@@ -38,7 +38,7 @@ Suppose the function did start, but MongoDB still has no document for the book. 
 
 **Your answer:** Which path did you take in the console (service → page → tab)?
 
-...
+Lambda → Functions → `book-analyzer-dev-analyze_new_book` → Monitor → View CloudWatch logs → newest log stream. The `pg74.txt` run logs `pg74.txt: 74383 words`.
 
 ## 4. EC2 or Lambda: a backlog or new uploads?
 
@@ -54,4 +54,4 @@ For comparison, typical times in this lab:
 
 **Your answer:**
 
-...
+**Case A:** Use EC2 for the 5,000 books already in the bucket because it can process the backlog as one batch; the S3 upload trigger only handles new uploads. **Case B:** Use Lambda for a few books uploaded at random times because each upload starts analysis automatically, without keeping a machine running between uploads.
